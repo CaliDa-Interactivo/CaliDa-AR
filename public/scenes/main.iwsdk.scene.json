@@ -1,0 +1,84 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        1,
+        0.97,
+        0.92,
+        1
+      ],
+      "equator": [
+        0.9,
+        0.84,
+        0.76,
+        1
+      ],
+      "ground": [
+        0.6,
+        0.52,
+        0.44,
+        1
+      ],
+      "intensity": 0.55
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1,
+    "shadows": false
+  },
+  "resources": {},
+  "nodes": [
+    {
+      "id": "luz-principal",
+      "name": "Luz principal",
+      "transform": {
+        "position": [
+          -2,
+          5,
+          3
+        ],
+        "rotationDeg": [
+          -55,
+          -25,
+          0
+        ]
+      },
+      "components": {
+        "DirectionalLight": {
+          "color": [
+            1,
+            0.945,
+            0.88,
+            1
+          ],
+          "intensity": 1.9,
+          "castShadow": false
+        }
+      }
+    },
+    {
+      "id": "luz-relleno",
+      "name": "Luz de relleno",
+      "components": {
+        "HemisphereLight": {
+          "skyColor": [
+            1,
+            0.97,
+            0.93,
+            1
+          ],
+          "groundColor": [
+            0.72,
+            0.6,
+            0.5,
+            1
+          ],
+          "intensity": 1.1
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+    <link rel="icon" href="data:," />
+    <title>CaliDa · Realidad aumentada</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #f7cd80;
+        font-family: Roboto, 'Segoe UI', Arial, sans-serif;
+        color: #011e41;
+        overflow: hidden;
+      }
+      #scene-container {
+        position: fixed;
+        inset: 0;
+      }
+      #entrada {
+        position: fixed;
+        left: 24px;
+        bottom: 24px;
+        max-width: 360px;
+        padding: 20px 24px;
+        border-radius: 28px;
+        background: #fff6e6;
+        box-shadow:
+          0 5px 12px rgba(1, 30, 65, 0.14),
+          0 1px 2px rgba(1, 30, 65, 0.1);
+      }
+      #entrada[hidden] {
+        display: none;
+      }
+      #entrada h1 {
+        margin: 0 0 6px;
+        font-size: 28px;
+        font-weight: 900;
+      }
+      #entrada h1 span:first-child {
+        color: #f67751;
+      }
+      #entrada h1 span:last-child {
+        color: #cc0100;
+      }
+      #entrada p {
+        margin: 0 0 14px;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      #entrar {
+        font: 700 16px Roboto, sans-serif;
+        color: #fff6e6;
+        background: #cc0100;
+        border: 0;
+        border-radius: 999px;
+        padding: 14px 26px;
+        cursor: pointer;
+        box-shadow: 0 5px 0 #a5121a;
+      }
+      #entrar:disabled {
+        background: #b8ad9c;
+        box-shadow: 0 5px 0 #8f8678;
+        cursor: default;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="scene-container"></div>
+    <div id="entrada">
+      <h1><span>Cali</span><span>Da</span> en realidad aumentada</h1>
+      <p id="aviso">
+        Ponte las gafas Meta Quest, despeja una mesa y entra. Usa tus manos:
+        junta el pulgar y el índice para tocar y agarrar.
+      </p>
+      <button id="entrar" type="button">Entrar en realidad aumentada</button>
+    </div>
+    <script type="module" src="/src/index.ts"></script>
+  </body>
+</html>

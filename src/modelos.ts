@@ -46,8 +46,20 @@ const M = {
   cobre: mate('#B8683A'),
   salvia: mate(COLOR.salvia),
   crema: mate(COLOR.crema),
-  lona: mate(COLOR.marfil, { side: DoubleSide }),
-  lonaRoja: mate(COLOR.rojo, { side: DoubleSide }),
+  // La carpa es translúcida: en realidad aumentada la persona siempre
+  // debe seguir viendo su entorno real a través de la lona.
+  lona: mate(COLOR.marfil, {
+    side: DoubleSide,
+    transparent: true,
+    opacity: 0.3,
+    depthWrite: false,
+  }),
+  lonaRoja: mate(COLOR.rojo, {
+    side: DoubleSide,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+  }),
   rio: mate('#6FB3D8'),
 };
 
@@ -505,7 +517,7 @@ export function crearCarpa(): Group {
   // Estera en el piso.
   const estera = new Mesh(
     new PlaneGeometry(a * 2 - 0.5, d - 0.3),
-    mate(COLOR.salvia, { transparent: true, opacity: 0.9 }),
+    mate(COLOR.salvia, { transparent: true, opacity: 0.22, depthWrite: false }),
   );
   estera.rotation.x = -Math.PI / 2;
   estera.position.y = 0.006;

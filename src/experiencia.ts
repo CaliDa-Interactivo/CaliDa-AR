@@ -50,6 +50,7 @@ import {
   type MesaArmada,
 } from './modelos.js';
 import { Etiqueta, Globo, PastillaBoton } from './texto.js';
+import { AnclaWebXR, buscarMesa, funcionesActivas } from './webxr.js';
 
 type Fase =
   | 'bienvenida'
@@ -173,6 +174,8 @@ export class ExperienciaSystem extends createSystem({
   private esperandoUso = false;
   private felizHasta = 0;
 
+  // Ancla de WebXR que fija la mesa de trabajo al mundo real.
+  private ancla = new AnclaWebXR();
   private movimientos: Movimiento[] = [];
   // Viaje del camión por las calles del mapa.
   private ruta: Vector3[] = [];
@@ -279,6 +282,12 @@ export class ExperienciaSystem extends createSystem({
         anterior = estado;
         if (antes !== ahora) {
           this.reinicioEn = this.tiempo + 0.5;
+          if (!ahora) {
+            console.info(
+              'WebXR: sesión de realidad aumentada con',
+              funcionesActivas(this.world.xrSession).join(', ') || 'funciones básicas',
+            );
+          }
         }
       }),
     );
@@ -522,6 +531,7 @@ export class ExperienciaSystem extends createSystem({
   // --- Inicio ------------------------------------------------------------
   private reiniciar(): void {
     this.movimientos.length = 0;
+    this.ancla.soltar();
     this.fase = 'bienvenida';
     this.tFase = 0;
     this.destino = -1;
@@ -638,6 +648,13 @@ export class ExperienciaSystem extends createSystem({
       0,
     );
     this.mesaVirtual = !real;
+    // La estación queda anclada al mundo real (anclas de WebXR).
+    const cuadro = this.world.xrFrame;
+    const espacio = this.world.xrReferenceSpace;
+    if (cuadro && espacio) {
+      raiz.updateWorldMatrix(true, false);
+      this.ancla.crear(cuadro, espacio, raiz);
+    }
     if (this.mesaVirtual) {
       this.mesaArmada.patas.scale.y = Math.max(0.1, raiz.position.y - 0.04);
       this.aparecer(this.mesa);
@@ -654,6 +671,13 @@ export class ExperienciaSystem extends createSystem({
   /** Busca un plano horizontal a la altura de una mesa. Deja el punto en v3. */
   private buscarPlano(): boolean {
     this.cabeza(this.v1, this.v2);
+    // 1) WebXR directo: los planos que el visor detectó en este cuadro.
+    const cuadro = this.world.xrFrame;
+    const espacio = this.world.xrReferenceSpace;
+    if (cuadro && espacio && buscarMesa(cuadro, espacio, this.v1, this.v3)) {
+      return true;
+    }
+    // 2) Respaldo: las entidades de plano que mantiene IWSDK.
     let mejor = Infinity;
     for (const ent of this.queries.planos.entities) {
       const plano = ent.getValue(PlanoXR, '_plane') as XRPlane | undefined;
@@ -1163,6 +1187,15 @@ export class ExperienciaSystem extends createSystem({
       caja.position.copy(camion.position).add(this.v1);
       caja.scale.copy(camion.scale);
       caja.rotation.y = camion.rotation.y;
+    }
+
+    // La estación sigue a su ancla de WebXR (el visor la va corrigiendo).
+    if (this.ancla.activa) {
+      const cuadro = this.world.xrFrame;
+      const espacio = this.world.xrReferenceSpace;
+      if (cuadro && espacio) {
+        this.ancla.seguir(cuadro, espacio, this.estacion.object3D!);
+      }
     }
 
     // El gato mira a la persona, respira y salta cuando algo sale bien.

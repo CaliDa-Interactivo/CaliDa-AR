@@ -37,6 +37,19 @@ npm run dev
 Manos: se apunta con la mano y se **junta el pulgar con el índice** para tocar y agarrar
 (también funciona con los controles: gatillo).
 
+## WebXR
+
+WebXR es la API del navegador de las gafas que da acceso a la sesión inmersiva; IWSDK funciona
+encima de ella. Además de lo que IWSDK hace por dentro, `src/webxr.ts` la usa directamente:
+
+- `navigator.xr.isSessionSupported('immersive-ar')`: la pantalla de entrada avisa si el equipo
+  puede abrir la sesión de realidad aumentada.
+- `XRFrame.detectedPlanes`: se recorren los planos que detecta el visor para encontrar una mesa real.
+- `XRFrame.createAnchor`: la estación de trabajo queda anclada al mundo real y sigue a su ancla.
+- `XRSession.enabledFeatures`: al entrar, la consola muestra qué funciones concedió el visor.
+
+Las funciones que se piden a la sesión están en `iwsdk.config.json` (`world.xr.features`).
+
 ## Dónde está cada cosa
 
 | Archivo | Qué tiene |
@@ -45,6 +58,7 @@ Manos: se apunta con la mano y se **junta el pulgar con el índice** para tocar 
 | `src/experiencia.ts` | El flujo completo (fases, mesa real o virtual, caja, camión, mapa, carpa) |
 | `src/datos.ts` | Productos, refugios y sus necesidades, textos de las situaciones, paleta |
 | `src/modelos.ts` | Modelos: los `.glb` del equipo y los hechos en código (caja, camión, mesa, carpa, mapa) |
+| `src/webxr.ts` | Uso directo de WebXR: soporte, planos detectados y anclas |
 | `src/texto.ts` | Globo del gato, botón y etiquetas (Roboto) |
 | `src/assets.ts` | Catálogo de modelos (`public/models/*.glb`, copiados de la página) |
 

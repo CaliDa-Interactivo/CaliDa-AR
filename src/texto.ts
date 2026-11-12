@@ -118,29 +118,35 @@ export class Globo extends Letrero {
     rectRedondo(ctx, 14, 8, w - 28, h - 30, 56);
     ctx.fill();
 
+    // Título y mensaje centrados (a lo ancho y a lo alto del globo).
     const margen = 62;
-    let y = 92;
+    const arriba = 8;
+    const alto = h - 30;
     ctx.textBaseline = 'alphabetic';
-    ctx.textAlign = 'left';
-    if (this.titulo) {
-      ctx.fillStyle = COLOR.rojo;
-      ctx.font = `900 58px ${FUENTE}`;
-      ctx.fillText(this.titulo, margen, y);
-      y += 72;
-    }
-    ctx.fillStyle = COLOR.azul;
+    ctx.textAlign = 'center';
+    const altoTitulo = this.titulo ? 72 : 0;
     let tam = 50;
     let lineas: string[] = [];
     // Si el mensaje es largo, la letra baja un poco para que quepa.
     for (; tam >= 32; tam -= 3) {
       ctx.font = `400 ${tam}px ${FUENTE}`;
       lineas = partirEnLineas(ctx, this.texto, w - margen * 2);
-      if (y + lineas.length * tam * 1.3 < h - 44) {
+      if (altoTitulo + lineas.length * tam * 1.3 < alto - 70) {
         break;
       }
     }
+    const altoBloque = altoTitulo + lineas.length * tam * 1.3;
+    let y = arriba + (alto - altoBloque) / 2;
+    if (this.titulo) {
+      ctx.fillStyle = COLOR.rojo;
+      ctx.font = `900 58px ${FUENTE}`;
+      ctx.fillText(this.titulo, w / 2, y + 50, w - margen * 2);
+      y += altoTitulo;
+    }
+    ctx.fillStyle = COLOR.azul;
+    ctx.font = `400 ${tam}px ${FUENTE}`;
     for (const linea of lineas) {
-      ctx.fillText(linea, margen, y);
+      ctx.fillText(linea, w / 2, y + tam * 0.95);
       y += tam * 1.3;
     }
     this.listo();

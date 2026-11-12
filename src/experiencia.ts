@@ -44,6 +44,7 @@ import {
   crearMesa,
   crearProducto,
   crearTarima,
+  recorridoHasta,
   type CajaArmada,
   type GatoArmado,
   type MesaArmada,
@@ -84,6 +85,7 @@ const ALTO_GATO = 0.3;
 const ESCALA_EN_CAJA = 0.62;
 const ESCALA_CAMION_MAPA = 0.3;
 const OCULTO = 0.0001;
+const VELOCIDAD_CAMION = 0.13; // metros por segundo sobre el mapa
 const EJE_Y = new Vector3(0, 1, 0);
 
 interface Movimiento {
@@ -172,6 +174,9 @@ export class ExperienciaSystem extends createSystem({
   private felizHasta = 0;
 
   private movimientos: Movimiento[] = [];
+  // Viaje del camión por las calles del mapa.
+  private ruta: Vector3[] = [];
+  private tramo = 0;
   private v1 = new Vector3();
   private v2 = new Vector3();
   private v3 = new Vector3();
@@ -883,7 +888,7 @@ export class ExperienciaSystem extends createSystem({
     });
     this.aparecer(this.mapa);
     // El camión se vuelve de juguete y se parquea en la esquina del mapa.
-    this.v1.set(POS_MAPA.x + MAPA.ancho / 2 - 0.12, MAPA.alto, POS_MAPA.z + MAPA.fondo / 2 - 0.05);
+    this.v1.set(POS_MAPA.x + 0.28, MAPA.alto, POS_MAPA.z + 0.25);
     this.camion.object3D!.rotation.y = Math.PI;
     this.mover(this.camion.object3D!, this.v1, 0.9, { escala: ESCALA_CAMION_MAPA, arco: 0.08 });
     if (this.destino >= 0) {
@@ -920,16 +925,49 @@ export class ExperienciaSystem extends createSystem({
     }
     this.fase = 'viaje';
     this.tFase = 0;
-    const camion = this.camion.object3D!;
-    const casa = this.casas[this.destino].object3D!;
-    const meta = this.v1.set(
-      POS_MAPA.x + casa.position.x,
-      MAPA.alto,
-      POS_MAPA.z + casa.position.z + 0.075,
+    // El camión recorre la ciudad por las calles hasta el refugio.
+    this.cancelar(this.camion.object3D!);
+    this.camion.object3D!.scale.setScalar(ESCALA_CAMION_MAPA);
+    this.ruta = recorridoHasta(this.destino);
+    for (const punto of this.ruta) {
+      punto.x += POS_MAPA.x;
+      punto.z += POS_MAPA.z;
+    }
+    this.tramo = 0;
+    this.decir(
+      REFUGIOS[this.destino].nombre,
+      'El camión recorre Cali con tu donación…',
     );
-    camion.rotation.y = Math.atan2(-(meta.z - camion.position.z), meta.x - camion.position.x);
-    this.decir(REFUGIOS[this.destino].nombre, 'El camión va en camino con tu donación…');
-    this.mover(camion, meta, 2.4, { fin: () => this.llegar() });
+  }
+
+  /** Avanza el camión por su recorrido; al llegar, cambia la perspectiva. */
+  private conducir(dt: number): void {
+    const camion = this.camion.object3D!;
+    let paso = VELOCIDAD_CAMION * dt;
+    while (paso > 0 && this.tramo < this.ruta.length) {
+      const meta = this.ruta[this.tramo];
+      const dx = meta.x - camion.position.x;
+      const dz = meta.z - camion.position.z;
+      const falta = Math.hypot(dx, dz);
+      if (falta <= paso) {
+        camion.position.copy(meta);
+        paso -= falta;
+        this.tramo++;
+        continue;
+      }
+      camion.position.x += (dx / falta) * paso;
+      camion.position.z += (dz / falta) * paso;
+      camion.position.y = meta.y;
+      // Gira suave hacia donde va (adelante es +x).
+      const giro = Math.atan2(-dz, dx);
+      let diferencia = giro - camion.rotation.y;
+      diferencia = Math.atan2(Math.sin(diferencia), Math.cos(diferencia));
+      camion.rotation.y += diferencia * Math.min(1, dt * 9);
+      paso = 0;
+    }
+    if (this.tramo >= this.ruta.length) {
+      this.llegar();
+    }
   }
 
   // --- Refugio: cambio de perspectiva -----------------------------------
@@ -1090,6 +1128,10 @@ export class ExperienciaSystem extends createSystem({
         this.enMano[i] = false;
         this.alSoltarProducto(ent);
       }
+    }
+
+    if (this.fase === 'viaje') {
+      this.conducir(dt);
     }
 
     // Movimientos suaves.

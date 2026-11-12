@@ -413,6 +413,47 @@ export function crearTarima(): Group {
 // --- Mapa de Cali --------------------------------------------------------
 export const MAPA = { ancho: 0.8, fondo: 0.6, alto: 0.016 };
 
+// Calles del mapa (metros, en el tablero; x: oriente +, z: sur +). Cada
+// refugio tiene su esquina, justo al frente de la casa.
+const ESQUINA = {
+  inicio: [0.28, 0.25],
+  norte: [0.04, -0.105],
+  occidente: [-0.165, 0.075],
+  centro: [0.0165, 0.03],
+  oriente: [0.19, 0.1],
+  sur: [-0.026, 0.225],
+} as const;
+type Esquina = keyof typeof ESQUINA;
+
+const CALLES: [Esquina, Esquina][] = [
+  ['inicio', 'sur'],
+  ['inicio', 'oriente'],
+  ['sur', 'centro'],
+  ['oriente', 'centro'],
+  ['centro', 'norte'],
+  ['centro', 'occidente'],
+  ['occidente', 'sur'],
+  ['norte', 'oriente'],
+];
+
+// Recorrido del camión hasta cada refugio (mismo orden de REFUGIOS): sale
+// de la esquina del mapa y atraviesa la ciudad por las calles, pasando por
+// otras zonas antes de llegar.
+const RECORRIDOS: Esquina[][] = [
+  ['inicio', 'sur', 'occidente', 'centro', 'norte'], // Floralia (Norte)
+  ['inicio', 'oriente', 'norte', 'centro', 'occidente'], // Siloé (Occidente)
+  ['inicio', 'sur', 'occidente', 'centro'], // Jairo Varela (Centro)
+  ['inicio', 'sur', 'centro', 'norte', 'oriente'], // Aguablanca (Oriente)
+  ['inicio', 'oriente', 'centro', 'occidente', 'sur'], // Meléndez (Sur)
+];
+
+/** Puntos por los que pasa el camión, en el tablero del mapa. */
+export function recorridoHasta(refugio: number): Vector3[] {
+  return RECORRIDOS[refugio].map(
+    (e) => new Vector3(ESQUINA[e][0], MAPA.alto, ESQUINA[e][1]),
+  );
+}
+
 export function crearMapa(): Group {
   const g = new Group();
   const { ancho: w, fondo: d, alto: h } = MAPA;
@@ -431,6 +472,16 @@ export function crearMapa(): Group {
     zona.scale.set(rx, 1, rz);
     zona.position.set(x, h + 0.002, z);
     g.add(zona);
+  }
+  // Calles: unen las zonas y es por donde anda el camión.
+  const asfalto = mate('#FFF3DC');
+  for (const [desde, hasta] of CALLES) {
+    const [x0, z0] = ESQUINA[desde];
+    const [x1, z1] = ESQUINA[hasta];
+    const largo = Math.hypot(x1 - x0, z1 - z0);
+    const calle = caja(largo + 0.022, 0.003, 0.022, asfalto, (x0 + x1) / 2, h + 0.0052, (z0 + z1) / 2);
+    calle.rotation.y = Math.atan2(-(z1 - z0), x1 - x0);
+    g.add(calle);
   }
   // Río Cauca al oriente.
   g.add(caja(0.028, 0.004, d * 0.94, M.rio, w / 2 - 0.05, h + 0.002, 0));

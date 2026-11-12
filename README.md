@@ -17,6 +17,23 @@ y pensada **solo para gafas Meta Quest**. Es un proyecto aparte de la página in
    - Si los recursos no alcanzan → vuelve a la selección para completar la donación.
 8. El gato cierra la experiencia.
 
+## Guion nuevo "Cali en tu mesa" (en construcción)
+
+El equipo cambió el guion: la persona es gestora de donaciones durante una semana (un lote) sobre
+una maqueta de Cali en su mesa. Se construye escena por escena en `src/guion/` y, mientras no esté
+completo el MVP, se abre agregando **`?guion`** a la dirección (con `?guion&prueba` se recorre con
+el mouse). Sin eso se abre el recorrido anterior.
+
+| Escena | Estado |
+| --- | --- |
+| 1 DETECTAR_MESA · 2 COLOCAR_MAQUETA · 3 MISION | hechas |
+| 5 a 8, 10 y 11 (resto del MVP) y la campana | pendientes |
+| 4, 9 y 12 | después del MVP |
+
+Archivos: `maquina.ts` (máquina de estados), `contexto.ts` (lo que comparten las escenas),
+`estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `sonidos.ts`, `animador.ts` y
+`escenas/NN-nombre.ts` (una por escena).
+
 ## Cómo abrirlo
 
 Hace falta Node 20.19 o más nuevo.

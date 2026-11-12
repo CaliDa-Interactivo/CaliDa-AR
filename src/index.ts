@@ -2,6 +2,7 @@
 import { VisibilityState, World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { ExperienciaSystem } from './experiencia.js';
+import { GuionSystem } from './guion/maquina.js';
 import { comprobarWebXR } from './webxr.js';
 
 const entrada = document.getElementById('entrada') as HTMLDivElement;
@@ -10,12 +11,19 @@ const aviso = document.getElementById('aviso') as HTMLParagraphElement;
 const estadoWebXR = document.getElementById('webxr') as HTMLParagraphElement;
 // ?prueba: recorrido con el mouse en el computador, sin la pantalla de entrada.
 const enPrueba = new URLSearchParams(window.location.search).has('prueba');
+const conGuion = new URLSearchParams(window.location.search).has('guion');
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 ).then(async (world) => {
-  world.registerSystem(ExperienciaSystem);
+  // ?guion: el guion nuevo "Cali en tu mesa" (en construcción, escena por
+  // escena). Sin eso se abre el recorrido anterior, que sigue completo.
+  if (conGuion) {
+    world.registerSystem(GuionSystem);
+  } else {
+    world.registerSystem(ExperienciaSystem);
+  }
   if (enPrueba) {
     // Para revisar el estado desde la consola del navegador.
     (window as unknown as Record<string, unknown>).mundo = world;

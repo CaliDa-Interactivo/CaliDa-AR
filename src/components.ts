@@ -1,4 +1,4 @@
 import { defineComponents } from '@iwsdk/core';
-import { Boton, CajaDonacion, Casa, Producto } from './componentes-calida.js';
+import { Boton, CajaDonacion, Casa, Producto, Tocable } from './componentes-calida.js';
 
-export default defineComponents([Producto, Boton, Casa, CajaDonacion]);
+export default defineComponents([Producto, Boton, Casa, CajaDonacion, Tocable]);

@@ -16,3 +16,8 @@ export const Casa = createComponent('Casa', {
 
 /** La caja de la donación. */
 export const CajaDonacion = createComponent('CajaDonacion', {});
+
+/** Guion "Cali en tu mesa": cualquier cosa que se toca o se agarra. */
+export const Tocable = createComponent('Tocable', {
+  id: { type: Types.String, default: '' },
+});

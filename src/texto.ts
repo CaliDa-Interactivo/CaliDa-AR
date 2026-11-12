@@ -206,7 +206,13 @@ export class Etiqueta extends Letrero {
     const w = lienzo.width;
     const h = lienzo.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.font = `700 46px ${FUENTE}`;
+    // Si el texto es largo, la letra baja hasta que quepa (sin apretarla).
+    let tam = 46;
+    ctx.font = `700 ${tam}px ${FUENTE}`;
+    while (tam > 22 && ctx.measureText(this.texto).width > w - 80) {
+      tam -= 2;
+      ctx.font = `700 ${tam}px ${FUENTE}`;
+    }
     const ancho = Math.min(w - 8, ctx.measureText(this.texto).width + 72);
     ctx.fillStyle = this.fondo;
     rectRedondo(ctx, (w - ancho) / 2, 12, ancho, h - 24, (h - 24) / 2);

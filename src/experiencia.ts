@@ -1077,6 +1077,21 @@ export class ExperienciaSystem extends createSystem({
       this.colocarEstacion();
     }
 
+    // Red de seguridad: si algo quedó "en la mano" pero ya no está ni
+    // agarrado ni presionado (un aviso perdido cuando el equipo va lento),
+    // se suelta aquí.
+    if (this.cajaEnMano && !this.caja.hasComponent(Grabbed) && !this.caja.hasComponent(Pressed)) {
+      this.cajaEnMano = false;
+      this.alSoltarCaja();
+    }
+    for (let i = 0; i < this.productos.length; i++) {
+      const ent = this.productos[i];
+      if (this.enMano[i] && !ent.hasComponent(Grabbed) && !ent.hasComponent(Pressed)) {
+        this.enMano[i] = false;
+        this.alSoltarProducto(ent);
+      }
+    }
+
     // Movimientos suaves.
     for (let i = this.movimientos.length - 1; i >= 0; i--) {
       const m = this.movimientos[i];

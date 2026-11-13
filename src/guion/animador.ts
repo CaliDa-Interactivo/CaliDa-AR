@@ -52,6 +52,11 @@ export class Animador {
     }
   }
 
+  /** ¿Ese objeto se está moviendo ahora? */
+  tiene(obj: Object3D): boolean {
+    return this.lista.some((m) => m.obj === obj);
+  }
+
   limpiar(): void {
     this.lista.length = 0;
   }

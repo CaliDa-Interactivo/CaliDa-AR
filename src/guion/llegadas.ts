@@ -47,7 +47,7 @@ export interface Objeto {
   categoria: Categoria;
   dano: Dano;
   /** Dónde está: en su caja, flotando sobre la caja abierta, o ya resuelto. */
-  lugar: 'caja' | 'suelto' | 'repisa' | 'descarte';
+  lugar: 'caja' | 'suelto' | 'repisa' | 'descarte' | 'lote';
   /** Punto al que vuelve si rebota. */
   casa: Vector3;
   caja: number;
@@ -395,7 +395,9 @@ export class Llegadas {
     const i = this.ocupados[k]++;
     objeto.lugar = 'repisa';
     this.siluetas[k][i].visible = false;
-    this.c.anim.mover(objeto.entidad.object3D!, this.puesto(k, i, this.v), 0.3, { escala: 0.85 });
+    // Su puesto en la repisa pasa a ser su "casa" (adonde vuelve si rebota).
+    objeto.casa.copy(this.puesto(k, i, this.v));
+    this.c.anim.mover(objeto.entidad.object3D!, objeto.casa, 0.3, { escala: 0.85 });
     this.pintarContadores();
     return true;
   }
@@ -448,8 +450,43 @@ export class Llegadas {
     return true;
   }
 
-  /** Rebota: vuelve a su sitio sobre la caja. */
+  /** Rebota: vuelve a su sitio (sobre la caja, o en su repisa). */
   rebotar(objeto: Objeto): void {
-    this.c.anim.mover(objeto.entidad.object3D!, objeto.casa, 0.45, { arco: 0.1, escala: 1 });
+    this.c.anim.mover(objeto.entidad.object3D!, objeto.casa, 0.45, {
+      arco: 0.1,
+      escala: objeto.lugar === 'repisa' ? 0.85 : 1,
+    });
+  }
+
+  /** Un objeto de la repisa pasa a la caja del lote (baja su contador). */
+  alLote(objeto: Objeto): void {
+    objeto.lugar = 'lote';
+    this.sacados[CATEGORIAS.findIndex((k) => k.id === objeto.categoria)]++;
+    this.pintarContadores();
+  }
+
+  /** Un objeto del lote vuelve a su repisa (sube su contador). */
+  devolver(objeto: Objeto): void {
+    objeto.lugar = 'repisa';
+    this.sacados[CATEGORIAS.findIndex((k) => k.id === objeto.categoria)]--;
+    this.pintarContadores();
+    this.rebotar(objeto);
+  }
+
+  /** Si alguien movió un objeto de la repisa y lo dejó en el aire, vuelve a su puesto. */
+  acomodar(indice: number): void {
+    const objeto = this.objetos[indice];
+    if (!objeto || objeto.lugar !== 'repisa') {
+      return;
+    }
+    const obj = objeto.entidad.object3D!;
+    if (!this.c.anim.tiene(obj) && obj.position.distanceTo(objeto.casa) > 0.01) {
+      this.rebotar(objeto);
+    }
+  }
+
+  /** ¿Ya se armó un lote a mano (escena 9)? */
+  hayLote(): boolean {
+    return this.objetos.some((o) => o.lugar === 'lote');
   }
 }

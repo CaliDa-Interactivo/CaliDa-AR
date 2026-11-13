@@ -29,8 +29,8 @@ mouse y con `?anterior` se abre el primer recorrido (donante → beneficiario).
 | --- | --- |
 | 1 DETECTAR_MESA · 2 COLOCAR_MAQUETA · 3 MISION | hechas |
 | Campana de avisos · 5 NOTIFICACION_CAJAS · 6 RESTOCK_MANUAL | hechas |
-| 7 NECESIDADES · 8 URGENCIA · 10 DESPACHO · 11 FAMILIA (entrega) | hechas (MVP completo) |
-| 4 TUTORIAL · 9 ARMAR_CAJA · 12 CIERRE | pendientes |
+| 7 NECESIDADES · 8 URGENCIA · 10 DESPACHO · 11 FAMILIA (entrega) | hechas |
+| 4 TUTORIAL · 9 ARMAR_CAJA · 12 CIERRE | hechas (guion completo) |
 
 Archivos en `src/guion/`: `maquina.ts` (máquina de estados), `contexto.ts` (lo que comparten las
 escenas), `estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `zonas-cali.ts`,

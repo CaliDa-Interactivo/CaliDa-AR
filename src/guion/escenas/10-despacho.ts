@@ -6,8 +6,7 @@
 // (la calle inundada está bloqueada) y baja la palanca: el camión
 // recorre la ruta dibujada.
 //
-// En el MVP no está la escena 9 (armar la caja a mano): el lote
-// urgente se arma solo con agua y ropa de la estantería.
+// El lote viene de la escena 9 (la caja que la persona armó).
 // Dibujar: con el dedo índice sobre el mapa, o apuntando y
 // pellizcando (rayo de la mano, control o mouse).
 // ============================================================
@@ -248,8 +247,11 @@ export function crearDespacho(): Escena {
       p.position.set(POS_MAPA.x - 0.36, 0, POS_MAPA.z + 0.3);
       // El lote urgente sale de las repisas (bajan sus contadores).
       c.maquetaEnt.object3D!.updateWorldMatrix(true, false);
-      c.llegadas.sacar('alimento-agua', obj.position);
-      c.llegadas.sacar('ropa-ninos', obj.position);
+      // (Si no se armó la caja a mano en la escena 9, se arma sola.)
+      if (!c.llegadas.hayLote()) {
+        c.llegadas.sacar('alimento-agua', obj.position);
+        c.llegadas.sacar('ropa-ninos', obj.position);
+      }
       pista.escribir('Dibuja la ruta del CA a Oriente y baja la palanca', COLOR.petroleo);
       c.gato.decir('El lote ya está en el camión. Dibuja con el dedo la ruta del CA a Oriente y baja la palanca roja.');
     },

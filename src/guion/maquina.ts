@@ -19,12 +19,15 @@ import { Contexto, type Escena } from './contexto.js';
 import { crearDetectarMesa } from './escenas/01-detectar-mesa.js';
 import { crearColocarMaqueta } from './escenas/02-colocar-maqueta.js';
 import { crearMision } from './escenas/03-mision.js';
+import { crearTutorial } from './escenas/04-tutorial.js';
 import { crearNotificacionCajas } from './escenas/05-cajas.js';
 import { crearRestock } from './escenas/06-restock.js';
 import { crearNecesidades } from './escenas/07-necesidades.js';
 import { crearUrgencia } from './escenas/08-urgencia.js';
+import { crearArmarCaja } from './escenas/09-armar-caja.js';
 import { crearDespacho } from './escenas/10-despacho.js';
 import { crearFamilia } from './escenas/11-familia.js';
+import { crearCierre } from './escenas/12-cierre.js';
 import { estadoInicial } from './estado.js';
 import { sonidos } from './sonidos.js';
 
@@ -61,12 +64,15 @@ export class GuionSystem extends createSystem({
       crearDetectarMesa(),
       crearColocarMaqueta(),
       crearMision(),
+      crearTutorial(),
       crearNotificacionCajas(),
       crearRestock(),
       crearNecesidades(),
       crearUrgencia(),
+      crearArmarCaja(),
       crearDespacho(),
       crearFamilia(),
+      crearCierre(),
     ];
     this.c.pulsar = (id, entidad) => {
       if (!this.c.avisos.tocar(id)) {
@@ -137,8 +143,8 @@ export class GuionSystem extends createSystem({
       c.estado.escena = 'CONTINUARA';
       c.gato.animar('quieto');
       c.gato.decir(
-        'Hasta aquí va esta versión. Pronto: armar la caja a mano y el cierre de la semana con la carta del lote.',
-        'Continuará',
+        'Terminaste la semana del lote. ¡Gracias por gestionar las donaciones de Cali!',
+        'Fin del lote',
       );
       return;
     }
@@ -164,6 +170,10 @@ export class GuionSystem extends createSystem({
       this.actual.alTocar?.(this.c, id, entidad);
     }
     this.actual.alSoltar?.(this.c, id, entidad, toque);
+    // Un objeto de la repisa que nadie recibió vuelve a su puesto.
+    if (id.startsWith('objeto:')) {
+      this.c.llegadas.acomodar(Number(id.slice(7)));
+    }
   }
 
   update(delta: number): void {

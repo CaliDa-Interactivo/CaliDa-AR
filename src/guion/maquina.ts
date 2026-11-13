@@ -19,6 +19,8 @@ import { Contexto, type Escena } from './contexto.js';
 import { crearDetectarMesa } from './escenas/01-detectar-mesa.js';
 import { crearColocarMaqueta } from './escenas/02-colocar-maqueta.js';
 import { crearMision } from './escenas/03-mision.js';
+import { crearNotificacionCajas } from './escenas/05-cajas.js';
+import { crearRestock } from './escenas/06-restock.js';
 import { estadoInicial } from './estado.js';
 import { sonidos } from './sonidos.js';
 
@@ -51,7 +53,14 @@ export class GuionSystem extends createSystem({
         this.c.gato.decir(TAREA[opcion]);
       }
     };
-    this.escenas = [crearDetectarMesa(), crearColocarMaqueta(), crearMision()];
+    this.escenas = [
+      crearDetectarMesa(),
+      crearColocarMaqueta(),
+      crearMision(),
+      crearNotificacionCajas(),
+      crearRestock(),
+    ];
+    this.c.avisos.alAccion = (aviso) => this.actual?.alAviso?.(this.c, aviso);
 
     // Tocar o agarrar: empieza con "presionado" o "agarrado" (lo que llegue
     // primero) y termina cuando ya no queda ninguno de los dos.
@@ -89,6 +98,8 @@ export class GuionSystem extends createSystem({
     c.gato.ocultar();
     c.mostrar(c.maquetaEnt, false);
     c.mostrarPanel(false);
+    c.avisos.reiniciar();
+    c.llegadas.reiniciar();
     c.mostrar(c.mesa, false);
     this.enMano.clear();
     c.leerCabeza();
@@ -105,7 +116,7 @@ export class GuionSystem extends createSystem({
       c.estado.escena = 'CONTINUARA';
       c.gato.animar('quieto');
       c.gato.decir(
-        'Hasta aquí va esta versión. Pronto: la campana de tu muñeca y las cajas que llegan al centro de acopio.',
+        'Hasta aquí va esta versión. Pronto: las necesidades de cada zona y la urgencia por lluvias en Oriente.',
         'Continuará',
       );
       return;
@@ -125,6 +136,10 @@ export class GuionSystem extends createSystem({
     const id = entidad.getValue(Tocable, 'id') as string;
     const toque = obj.position.distanceTo(inicio) < 0.035;
     if (toque) {
+      // La campana y sus avisos responden en cualquier escena.
+      if (this.c.avisos.tocar(id)) {
+        return;
+      }
       this.actual.alTocar?.(this.c, id, entidad);
     }
     this.actual.alSoltar?.(this.c, id, entidad, toque);
@@ -167,6 +182,7 @@ export class GuionSystem extends createSystem({
 
     c.anim.actualizar(dt);
     this.actual?.actualizar?.(c, dt);
+    c.avisos.actualizar(dt);
     c.gato.actualizar(c.tiempo, c.cabeza);
   }
 }

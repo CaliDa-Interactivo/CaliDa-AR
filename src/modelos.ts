@@ -292,7 +292,7 @@ export interface CajaArmada {
   tapa: Group;
 }
 
-export function crearCaja(): CajaArmada {
+export function crearCaja(conCruz = true): CajaArmada {
   const { ancho: w, alto: h, fondo: d } = CAJA;
   const g = 0.008;
   const raiz = new Group();
@@ -304,9 +304,11 @@ export function crearCaja(): CajaArmada {
   // Relleno de papel: los productos se apoyan aquí y asoman por el borde.
   raiz.add(caja(w - 2 * g, 0.04, d - 2 * g, M.crema, 0, g + 0.02, 0));
   // Cruz roja al frente.
-  raiz.add(caja(0.07, 0.07, 0.002, M.marfil, 0, h / 2, d / 2 + 0.001));
-  raiz.add(caja(0.045, 0.014, 0.002, M.rojo, 0, h / 2, d / 2 + 0.003));
-  raiz.add(caja(0.014, 0.045, 0.002, M.rojo, 0, h / 2, d / 2 + 0.003));
+  if (conCruz) {
+    raiz.add(caja(0.07, 0.07, 0.002, M.marfil, 0, h / 2, d / 2 + 0.001));
+    raiz.add(caja(0.045, 0.014, 0.002, M.rojo, 0, h / 2, d / 2 + 0.003));
+    raiz.add(caja(0.014, 0.045, 0.002, M.rojo, 0, h / 2, d / 2 + 0.003));
+  }
 
   // Solapas abiertas hacia afuera.
   const solapas = new Group();

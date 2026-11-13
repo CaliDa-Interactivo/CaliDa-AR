@@ -30,7 +30,7 @@ export function crearMision(): Escena {
     // Etiqueta del lote, flotando sobre la maqueta.
     textoLote.escribir(`Lote ${c.estado.lote}`, COLOR.rojo);
     const obj = lote!.object3D!;
-    obj.position.set(0.3, 0.3, 0);
+    obj.position.set(0.4, 0.3, 0);
     obj.visible = true;
     obj.scale.setScalar(0.02);
     c.anim.mover(obj, null, 0.5, { escala: 1 });

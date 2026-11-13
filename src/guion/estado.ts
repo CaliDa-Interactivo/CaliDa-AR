@@ -38,6 +38,8 @@ export interface Estado {
   misiones: Mision[];
   familiasAtendidas: number;
   escena: string;
+  /** Día de la semana del lote (0 = lunes). */
+  dia: number;
 }
 
 export function estadoInicial(): Estado {
@@ -56,5 +58,6 @@ export function estadoInicial(): Estado {
     misiones: [],
     familiasAtendidas: 0,
     escena: '',
+    dia: 0,
   };
 }

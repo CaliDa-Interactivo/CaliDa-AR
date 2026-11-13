@@ -132,7 +132,7 @@ export function crearColocarMaqueta(): Escena {
           fase = 'ajuste';
           c.tEscena = 0;
           const boton = listo.object3D!;
-          boton.position.set(0.3, 0.3, 0.1);
+          boton.position.set(0.4, 0.3, 0.1);
           c.mostrar(listo, true);
           c.mostrarPanel(true);
         }

@@ -26,6 +26,9 @@ import { estadoInicial, type Estado } from './estado.js';
 import { Gato } from './gato.js';
 import { Manos } from './manos.js';
 import { crearMaqueta, type Maqueta } from './maqueta.js';
+import { Llegadas } from './llegadas.js';
+import { Notificaciones } from './notificaciones.js';
+import type { Aviso } from './estado.js';
 
 /** Una escena de la máquina de estados. */
 export interface Escena {
@@ -37,6 +40,8 @@ export interface Escena {
   alTocar?(c: Contexto, id: string, entidad: Entity): void;
   /** Se soltó algo que se había agarrado. `toque`: casi no se movió. */
   alSoltar?(c: Contexto, id: string, entidad: Entity, toque: boolean): void;
+  /** Se pulsó el botón de acción de un aviso de la campana. */
+  alAviso?(c: Contexto, aviso: Aviso): void;
 }
 
 export const OCULTO = 0.0001;
@@ -51,6 +56,10 @@ export class Contexto {
   readonly maqueta: Maqueta;
   readonly maquetaEnt: Entity;
   readonly gato: Gato;
+  /** Campana de avisos, su panel y el gestor de eventos. */
+  readonly avisos: Notificaciones;
+  /** Cajas que llegan y objetos para surtir la estantería. */
+  readonly llegadas: Llegadas;
   readonly mesa: Entity;
   readonly mesaArmada: MesaArmada;
   /** Punto de la mesa que encontró la escena 1. */
@@ -80,6 +89,8 @@ export class Contexto {
     this.mesa = this.crearSuelto(this.mesaArmada.raiz);
     this.gato = new Gato(mundo, this.raiz);
     this.tocable(this.gato.entidad, 'gato');
+    this.avisos = new Notificaciones(this);
+    this.llegadas = new Llegadas(this);
     void this.armarPanel();
   }
 

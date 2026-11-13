@@ -29,11 +29,14 @@ el mouse). Sin eso se abre el recorrido anterior.
 | Escena | Estado |
 | --- | --- |
 | 1 DETECTAR_MESA · 2 COLOCAR_MAQUETA · 3 MISION | hechas |
-| 5 a 8, 10 y 11 (resto del MVP) y la campana | pendientes |
+| Campana de avisos · 5 NOTIFICACION_CAJAS · 6 RESTOCK_MANUAL | hechas |
+| 7, 8, 10 y 11 (resto del MVP) | pendientes |
 | 4, 9 y 12 | después del MVP |
 
 Archivos: `maquina.ts` (máquina de estados), `contexto.ts` (lo que comparten las escenas),
-`estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `sonidos.ts`, `animador.ts` y
+`estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `notificaciones.ts` (campana, panel
+y gestor de eventos), `eventos.ts` (línea de tiempo por día), `llegadas.ts` (cajas y objetos),
+`sonidos.ts`, `animador.ts` y
 `escenas/NN-nombre.ts` (una por escena).
 
 ## Herramientas del proyecto (comprobadas)

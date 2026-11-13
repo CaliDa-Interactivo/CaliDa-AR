@@ -26,6 +26,8 @@ import { buscarMesa } from '../../webxr.js';
 import { OCULTO, type Contexto, type Escena } from '../contexto.js';
 import { sonidos } from '../sonidos.js';
 
+// En el computador la mesa va más lejos para que quepa todo en la pantalla.
+const DISTANCIA_PRUEBA = 1.45;
 const TIEMPO_FIJO = 1.5; // segundos mirando la mesa
 const TIEMPO_MAXIMO = 7; // después se usa un plano detectado o la mesa virtual
 
@@ -157,7 +159,7 @@ export function crearDetectarMesa(): Escena {
         }
       } else if (!c.enXR()) {
         // En el computador: la retícula va al frente, a la altura de una mesa.
-        obj.position.copy(c.cabeza).addScaledVector(c.frente, 0.85);
+        obj.position.copy(c.cabeza).addScaledVector(c.frente, c.enXR() ? 0.85 : DISTANCIA_PRUEBA);
         obj.position.y = 0.74;
       }
 
@@ -169,7 +171,7 @@ export function crearDetectarMesa(): Escena {
         if (cuadro && espacio && buscarMesa(cuadro, espacio, c.cabeza, punto)) {
           superficieLista(c, false);
         } else {
-          punto.copy(c.cabeza).addScaledVector(c.frente, 0.85);
+          punto.copy(c.cabeza).addScaledVector(c.frente, c.enXR() ? 0.85 : DISTANCIA_PRUEBA);
           punto.y = 0.74;
           superficieLista(c, true);
         }

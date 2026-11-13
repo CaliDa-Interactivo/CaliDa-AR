@@ -34,11 +34,11 @@ const ESCALA_PX = ALTO_MAPA / PX_ALTO;
 /** Grosor de las zonas. */
 export const GROSOR_ZONA = 0.022;
 /** Dónde va cada parte sobre la mesa (x: derecha +, z: hacia la persona +). */
-export const POS_CENTRO_ACOPIO = new Vector3(-0.4, 0, 0);
-export const POS_MAPA = new Vector3(0.3, 0, 0.02);
-export const ANCHO_ESTANTERIA = 0.46;
+export const POS_CENTRO_ACOPIO = new Vector3(-0.44, 0, -0.06);
+export const POS_MAPA = new Vector3(0.4, 0, 0.02);
+export const ANCHO_ESTANTERIA = 0.6;
 /** Punto del borde donde se para el gato. */
-export const POS_GATO = new Vector3(0.66, 0, 0.26);
+export const POS_GATO = new Vector3(0.72, 0, 0.28);
 
 const pxAMetros = (px: number, py: number): [number, number] => [
   (px - PX_CENTRO.x) * ESCALA_PX,
@@ -138,13 +138,13 @@ export function crearMaqueta(): Maqueta {
   centroAcopio.add(crearEstanteria(ANCHO_ESTANTERIA));
   const ca = new Etiqueta(0.16);
   ca.escribir('CA', COLOR.azul);
-  ca.malla.position.set(0, 0.006, 0.16);
+  ca.malla.position.set(-0.22, 0.006, 0.16);
   ca.malla.rotation.x = -Math.PI / 2;
   centroAcopio.add(ca.malla);
   raiz.add(centroAcopio);
   // El centro de acopio crece primero; después, el mapa zona por zona.
   crecen.unshift(centroAcopio);
 
-  const puestoPanel = new Vector3(POS_CENTRO_ACOPIO.x, 0.62, POS_CENTRO_ACOPIO.z - 0.02);
+  const puestoPanel = new Vector3(POS_CENTRO_ACOPIO.x, 0.74, POS_CENTRO_ACOPIO.z - 0.02);
   return { raiz, mapa, zonas, centroAcopio, puestoPanel, crecen };
 }

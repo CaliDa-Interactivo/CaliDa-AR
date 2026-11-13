@@ -14,6 +14,8 @@ import {
   Vector3,
   VisibilityState,
   type Entity,
+  type UIKit,
+  type UIKitMLAsset,
   type World,
 } from '@iwsdk/core';
 import { Tocable } from '../componentes-calida.js';
@@ -62,6 +64,11 @@ export class Contexto {
   readonly modoPrueba = new URLSearchParams(window.location.search).has('prueba');
   /** Pasa a la escena siguiente (lo pone la máquina de estados). */
   siguiente: () => void = () => undefined;
+  /** Panel espacial (UIKitML) con las opciones del centro de acopio. */
+  panel: Entity | null = null;
+  private panelUI: UIKitMLAsset | null = null;
+  /** Qué hacer cuando se toca una opción del panel (lo decide la escena). */
+  alElegirOpcion: (opcion: 'recibir' | 'surtir' | 'despachar') => void = () => undefined;
   private q = new Quaternion();
   private v = new Vector3();
 
@@ -73,6 +80,7 @@ export class Contexto {
     this.mesa = this.crearSuelto(this.mesaArmada.raiz);
     this.gato = new Gato(mundo, this.raiz);
     this.tocable(this.gato.entidad, 'gato');
+    void this.armarPanel();
   }
 
   enXR(): boolean {
@@ -100,6 +108,41 @@ export class Contexto {
         scale: false,
       });
     }
+  }
+
+  /** Carga el panel UIKitML y conecta sus tres opciones. */
+  private async armarPanel(): Promise<void> {
+    try {
+      const ui = await this.mundo.assets.instantiate<UIKitMLAsset>('centro-acopio');
+      // 1 px del panel = 1 cm: con esta escala mide unos 36 cm de ancho.
+      ui.scale.setScalar(0.07);
+      ui.position.copy(this.maqueta.puestoPanel);
+      ui.visible = false;
+      this.panelUI = ui;
+      this.panel = this.crear(ui, this.maquetaEnt);
+      this.panel.addComponent(RayInteractable);
+      for (const opcion of ['recibir', 'surtir', 'despachar'] as const) {
+        ui.getElementById(`opcion-${opcion}`)?.addEventListener('click', () => {
+          if (ui.visible) {
+            this.alElegirOpcion(opcion);
+          }
+        });
+      }
+      this.escribirPanel('lote', `Lote ${this.estado.lote}, esta semana`);
+    } catch (error) {
+      console.warn('No se pudo cargar el panel del centro de acopio', error);
+    }
+  }
+
+  mostrarPanel(visible: boolean): void {
+    if (this.panelUI) {
+      this.panelUI.visible = visible;
+    }
+  }
+
+  /** Cambia un texto del panel ("lote" o "estado"). */
+  escribirPanel(id: 'lote' | 'estado', texto: string): void {
+    this.panelUI?.getElementById<UIKit.Text>(id)?.setProperties({ text: texto });
   }
 
   mostrar(entidad: Entity, visible: boolean): void {

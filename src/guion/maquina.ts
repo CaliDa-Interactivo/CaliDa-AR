@@ -20,6 +20,7 @@ import { crearDetectarMesa } from './escenas/01-detectar-mesa.js';
 import { crearColocarMaqueta } from './escenas/02-colocar-maqueta.js';
 import { crearMision } from './escenas/03-mision.js';
 import { estadoInicial } from './estado.js';
+import { sonidos } from './sonidos.js';
 
 export class GuionSystem extends createSystem({
   tocado: { required: [Tocable, Pressed] },
@@ -36,6 +37,20 @@ export class GuionSystem extends createSystem({
   init(): void {
     this.c = new Contexto(this.world);
     this.c.siguiente = () => this.ir(this.indice + 1);
+    // Opciones del panel del centro de acopio. Sus tareas llegan con las
+    // escenas 5 a 10; por ahora el panel y el gato dicen qué hará cada una.
+    const TAREA = {
+      recibir: 'Aquí recibirás las cajas que la gente trae al centro.',
+      surtir: 'Aquí pondrás cada donación en su repisa y apartarás lo dañado.',
+      despachar: 'Aquí armarás un lote y lo enviarás a una zona del mapa.',
+    };
+    this.c.alElegirOpcion = (opcion) => {
+      sonidos.clic();
+      this.c.escribirPanel('estado', TAREA[opcion]);
+      if (this.c.gato.visible) {
+        this.c.gato.decir(TAREA[opcion]);
+      }
+    };
     this.escenas = [crearDetectarMesa(), crearColocarMaqueta(), crearMision()];
 
     // Tocar o agarrar: empieza con "presionado" o "agarrado" (lo que llegue
@@ -73,6 +88,7 @@ export class GuionSystem extends createSystem({
     c.estado = estadoInicial();
     c.gato.ocultar();
     c.mostrar(c.maquetaEnt, false);
+    c.mostrarPanel(false);
     c.mostrar(c.mesa, false);
     this.enMano.clear();
     c.leerCabeza();

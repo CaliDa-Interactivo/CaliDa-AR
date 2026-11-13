@@ -1,0 +1,86 @@
+<!--
+  Panel del centro de acopio (UIKitML): las opciones para gestionar las
+  donaciones. Colores de la paleta de CaliDa; divs planos para que se vean
+  igual en tema claro y oscuro. 1px = 1 cm antes de la escala del nodo.
+  Usa una Roboto propia (TTF en ./fonts): la fuente incluida en IWSDK no
+  trae tildes ni eñes.
+-->
+<style>
+  @font-face {
+    font-family: 'Roboto CaliDa';
+    font-weight: 400;
+    src: url('./fonts/Roboto-400Regular.ttf');
+  }
+  @font-face {
+    font-family: 'Roboto CaliDa';
+    font-weight: 700;
+    src: url('./fonts/Roboto-700Bold.ttf');
+  }
+
+  .panel {
+    flex-direction: column;
+    gap: 14px;
+    width: 520px;
+    padding-top: 26px;
+    padding-bottom: 28px;
+    padding-left: 28px;
+    padding-right: 28px;
+    border-radius: 36px;
+    background-color: #fff6e6;
+  }
+
+  .titulo {
+    font-family: 'Roboto CaliDa';
+    color: #cc0100;
+    font-size: 38px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .lote {
+    font-family: 'Roboto CaliDa';
+    color: #011e41;
+    font-size: 24px;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  .opcion {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    height: 72px;
+    border-radius: 36px;
+    background-color: #426d8c;
+    cursor: pointer;
+  }
+
+  .opcion-texto {
+    font-family: 'Roboto CaliDa';
+    color: #fff6e6;
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .estado {
+    font-family: 'Roboto CaliDa';
+    color: #514b46;
+    font-size: 22px;
+    text-align: center;
+    margin-top: 4px;
+  }
+</style>
+<div class="panel">
+  <span class="titulo">Centro de acopio</span>
+  <span id="lote" class="lote">Lote de esta semana</span>
+  <div id="opcion-recibir" class="opcion">
+    <span class="opcion-texto">Recibir donaciones</span>
+  </div>
+  <div id="opcion-surtir" class="opcion">
+    <span class="opcion-texto">Surtir la estantería</span>
+  </div>
+  <div id="opcion-despachar" class="opcion">
+    <span class="opcion-texto">Despachar al mapa</span>
+  </div>
+  <span id="estado" class="estado">Elige qué quieres gestionar</span>
+</div>

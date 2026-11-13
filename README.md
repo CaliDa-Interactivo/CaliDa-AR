@@ -19,8 +19,10 @@ y pensada **solo para gafas Meta Quest**. Es un proyecto aparte de la página in
 
 ## Guion nuevo "Cali en tu mesa" (en construcción)
 
-El equipo cambió el guion: la persona es gestora de donaciones durante una semana (un lote) sobre
-una maqueta de Cali en su mesa. Se construye escena por escena en `src/guion/` y, mientras no esté
+El equipo cambió el guion: la persona **es un centro de acopio** durante una semana (un lote). En
+la mesa aparecen dos cosas separadas: su puesto (estantería de madera "CA" y el panel con las
+opciones para gestionar las donaciones) y, aparte, el mapa de Cali con las cinco zonas (los mismos
+contornos y colores del mapa de la página, sin casas) para enviar lo que tiene. Se construye escena por escena en `src/guion/` y, mientras no esté
 completo el MVP, se abre agregando **`?guion`** a la dirección (con `?guion&prueba` se recorre con
 el mouse). Sin eso se abre el recorrido anterior.
 
@@ -33,6 +35,22 @@ el mouse). Sin eso se abre el recorrido anterior.
 Archivos: `maquina.ts` (máquina de estados), `contexto.ts` (lo que comparten las escenas),
 `estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `sonidos.ts`, `animador.ts` y
 `escenas/NN-nombre.ts` (una por escena).
+
+## Herramientas del proyecto (comprobadas)
+
+| Herramienta | Dónde está en este proyecto |
+| --- | --- |
+| **WebXR** | Sesión `immersive-ar` de las Quest. Uso directo en `src/webxr.ts` (soporte, planos, anclas) y `src/guion/manos.ts` (articulaciones de la mano) |
+| **IWSDK** | `@iwsdk/core` 1.1.0-rc.2; `iwsdk.config.json` manda sobre la sesión y las funciones |
+| **Three.js** | Viene dentro de IWSDK (super-three 0.185): siempre se importa de `@iwsdk/core`, nunca de `three` |
+| **IWER** | Emulador de Quest 3 (`iwer` 2.8, con `@iwsdk/vite-plugin-dev`): se abre con `npm run dev` |
+| **ECS** | Componentes en `src/componentes-calida.ts` y sistemas en `src/guion/maquina.ts` y `src/experiencia.ts` |
+| **UIKitML** | Panel del centro de acopio: `public/ui/centro-acopio.uikitml` (función `spatialUI`) |
+| Scene Understanding | `sceneUnderstanding: true` + planos y mallas: encontrar la mesa real |
+| Environment Raycast | `environmentRaycast: true` + `hitTest`: la retícula de la escena 1 sigue la mirada sobre superficies reales |
+
+Los paneles UIKitML usan una Roboto propia (`public/ui/fonts/`) y `src/guion/fuente-es.ts` le agrega
+las tildes y la eñe, que la fuente incluida en IWSDK no trae.
 
 ## Cómo abrirlo
 

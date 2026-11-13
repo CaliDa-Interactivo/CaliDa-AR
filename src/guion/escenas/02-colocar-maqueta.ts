@@ -2,8 +2,9 @@
 // Escena 2 · COLOCAR_MAQUETA
 // Una semilla brillante flota sobre la mesa. La persona la
 // pellizca y la suelta donde quiere: ahí se crea un ancla de
-// WebXR y crecen las 5 zonas con casitas y el centro de acopio
-// "CA". Después puede girar o agrandar la maqueta con dos manos.
+// WebXR y crecen el centro de acopio "CA" (su puesto) y, aparte,
+// el mapa de Cali con sus 5 zonas. Después puede agrandarlos o
+// achicarlos con las dos manos.
 // ============================================================
 import {
   Group,
@@ -27,9 +28,7 @@ export function crearColocarMaqueta(): Escena {
   // Gesto de dos manos.
   let girando = false;
   let separacion0 = 1;
-  let angulo0 = 0;
   let escala0 = 1;
-  let giro0 = 0;
 
   function armar(c: Contexto): void {
     const grupo = new Group();
@@ -90,7 +89,7 @@ export function crearColocarMaqueta(): Escena {
         fin: () => sonidos.pop(),
       });
     });
-    textoPista.escribir('Gírala o agrándala con las dos manos', COLOR.petroleo);
+    textoPista.escribir('Agrándala o achícala con las dos manos', COLOR.petroleo);
     c.tEscena = 0;
   }
 
@@ -104,6 +103,7 @@ export function crearColocarMaqueta(): Escena {
       fase = 'semilla';
       girando = false;
       c.mostrar(c.maquetaEnt, false);
+      c.mostrarPanel(false);
       c.mostrar(listo, false);
       c.mostrar(semilla!, true);
       semilla!.object3D!.position.copy(c.superficie);
@@ -132,26 +132,25 @@ export function crearColocarMaqueta(): Escena {
           fase = 'ajuste';
           c.tEscena = 0;
           const boton = listo.object3D!;
-          boton.position.set(0, 0.36, 0);
+          boton.position.set(0.3, 0.3, 0.1);
           c.mostrar(listo, true);
+          c.mostrarPanel(true);
         }
         return;
       }
 
-      // Ajuste: con los dos pellizcos a la vez se gira y se agranda.
+      // Ajuste: con los dos pellizcos a la vez se agranda o se achica.
       const maqueta = c.maquetaEnt.object3D!;
       c.mirar(listo.object3D!);
       if (c.manos.dosManos()) {
         if (!girando) {
           girando = true;
           separacion0 = Math.max(0.05, c.manos.separacion());
-          angulo0 = c.manos.angulo();
           escala0 = maqueta.scale.x;
-          giro0 = maqueta.rotation.y;
         }
+        // (No gira: el mapa y el centro de acopio quedan de frente.)
         const escala = (escala0 * c.manos.separacion()) / separacion0;
-        maqueta.scale.setScalar(Math.min(1.8, Math.max(0.6, escala)));
-        maqueta.rotation.y = giro0 - (c.manos.angulo() - angulo0);
+        maqueta.scale.setScalar(Math.min(1.5, Math.max(0.6, escala)));
       } else {
         girando = false;
       }

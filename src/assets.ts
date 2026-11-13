@@ -12,6 +12,12 @@ const glb = (archivo: string, name: string) => ({
 });
 
 export default defineAssets({
+  // Panel espacial (UIKitML) con las opciones del centro de acopio.
+  'centro-acopio': {
+    url: publicAssetUrl('ui/centro-acopio.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Panel del centro de acopio',
+  },
   gato: glb('gato', 'Gato guía'),
   estanteria: glb('estanteria', 'Estantería'),
   casa_roja: glb('casa_roja', 'Casa urgente'),

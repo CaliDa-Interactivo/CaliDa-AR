@@ -1,4 +1,5 @@
 // CaliDa — experiencia de realidad aumentada para Meta Quest (IWSDK).
+import './guion/fuente-es.js'; // tildes y eñes en los paneles (antes de crear el mundo)
 import { VisibilityState, World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { ExperienciaSystem } from './experiencia.js';

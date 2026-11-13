@@ -9,7 +9,7 @@ import { Vector3, type Entity } from '@iwsdk/core';
 import { COLOR } from '../../datos.js';
 import { Etiqueta } from '../../texto.js';
 import type { Contexto, Escena } from '../contexto.js';
-import { RADIO_MAQUETA } from '../maqueta.js';
+import { POS_GATO } from '../maqueta.js';
 import { sonidos } from '../sonidos.js';
 
 export function crearMision(): Escena {
@@ -30,7 +30,7 @@ export function crearMision(): Escena {
     // Etiqueta del lote, flotando sobre la maqueta.
     textoLote.escribir(`Lote ${c.estado.lote}`, COLOR.rojo);
     const obj = lote!.object3D!;
-    obj.position.set(0, 0.3, 0);
+    obj.position.set(0.3, 0.3, 0);
     obj.visible = true;
     obj.scale.setScalar(0.02);
     c.anim.mover(obj, null, 0.5, { escala: 1 });
@@ -50,10 +50,8 @@ export function crearMision(): Escena {
       }
       saludado = false;
       c.mostrar(lote, false);
-      // El gato salta al borde de la mesa.
-      const radio = RADIO_MAQUETA * c.maquetaEnt.object3D!.scale.x + 0.13;
-      // (a la derecha de la maqueta, apenas hacia la persona)
-      destino.set(Math.sin(1.4) * radio, 0, Math.cos(1.4) * radio);
+      // El gato salta al borde de la mesa, junto al mapa.
+      destino.copy(POS_GATO).multiplyScalar(c.maquetaEnt.object3D!.scale.x);
       const gato = c.gato.objeto;
       gato.visible = true;
       gato.scale.setScalar(1);

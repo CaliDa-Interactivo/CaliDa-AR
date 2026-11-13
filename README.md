@@ -17,27 +17,26 @@ y pensada **solo para gafas Meta Quest**. Es un proyecto aparte de la página in
    - Si los recursos no alcanzan → vuelve a la selección para completar la donación.
 8. El gato cierra la experiencia.
 
-## Guion nuevo "Cali en tu mesa" (en construcción)
+## Guion "Cali en tu mesa" (experiencia principal)
 
-El equipo cambió el guion: la persona **es un centro de acopio** durante una semana (un lote). En
-la mesa aparecen dos cosas separadas: su puesto (estantería de madera "CA" y el panel con las
-opciones para gestionar las donaciones) y, aparte, el mapa de Cali con las cinco zonas (los mismos
-contornos y colores del mapa de la página, sin casas) para enviar lo que tiene. Se construye escena por escena en `src/guion/` y, mientras no esté
-completo el MVP, se abre agregando **`?guion`** a la dirección (con `?guion&prueba` se recorre con
-el mouse). Sin eso se abre el recorrido anterior.
+La persona **es un centro de acopio** durante una semana (un lote). En la mesa aparecen dos cosas
+separadas: su puesto (estantería de madera "CA" y el panel con las opciones para gestionar las
+donaciones) y, aparte, el mapa de Cali con las cinco zonas (los mismos contornos y colores del mapa
+de la página, sin casas) para enviar lo que tiene. Se abre directo; con `?prueba` se recorre con el
+mouse y con `?anterior` se abre el primer recorrido (donante → beneficiario).
 
 | Escena | Estado |
 | --- | --- |
 | 1 DETECTAR_MESA · 2 COLOCAR_MAQUETA · 3 MISION | hechas |
 | Campana de avisos · 5 NOTIFICACION_CAJAS · 6 RESTOCK_MANUAL | hechas |
-| 7, 8, 10 y 11 (resto del MVP) | pendientes |
-| 4, 9 y 12 | después del MVP |
+| 7 NECESIDADES · 8 URGENCIA · 10 DESPACHO · 11 FAMILIA (entrega) | hechas (MVP completo) |
+| 4 TUTORIAL · 9 ARMAR_CAJA · 12 CIERRE | pendientes |
 
-Archivos: `maquina.ts` (máquina de estados), `contexto.ts` (lo que comparten las escenas),
-`estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `notificaciones.ts` (campana, panel
-y gestor de eventos), `eventos.ts` (línea de tiempo por día), `llegadas.ts` (cajas y objetos),
-`sonidos.ts`, `animador.ts` y
-`escenas/NN-nombre.ts` (una por escena).
+Archivos en `src/guion/`: `maquina.ts` (máquina de estados), `contexto.ts` (lo que comparten las
+escenas), `estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `zonas-cali.ts`,
+`notificaciones.ts` (campana, panel y gestor de eventos), `eventos.ts` (línea de tiempo por día),
+`llegadas.ts` (cajas y objetos), `zonas.ts` (burbujas, lluvia y misión), `sonidos.ts`,
+`animador.ts` y `escenas/NN-nombre.ts` (una por escena).
 
 ## Herramientas del proyecto (comprobadas)
 

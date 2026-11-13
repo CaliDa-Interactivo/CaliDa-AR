@@ -21,6 +21,10 @@ import { crearColocarMaqueta } from './escenas/02-colocar-maqueta.js';
 import { crearMision } from './escenas/03-mision.js';
 import { crearNotificacionCajas } from './escenas/05-cajas.js';
 import { crearRestock } from './escenas/06-restock.js';
+import { crearNecesidades } from './escenas/07-necesidades.js';
+import { crearUrgencia } from './escenas/08-urgencia.js';
+import { crearDespacho } from './escenas/10-despacho.js';
+import { crearFamilia } from './escenas/11-familia.js';
 import { estadoInicial } from './estado.js';
 import { sonidos } from './sonidos.js';
 
@@ -59,8 +63,24 @@ export class GuionSystem extends createSystem({
       crearMision(),
       crearNotificacionCajas(),
       crearRestock(),
+      crearNecesidades(),
+      crearUrgencia(),
+      crearDespacho(),
+      crearFamilia(),
     ];
-    this.c.avisos.alAccion = (aviso) => this.actual?.alAviso?.(this.c, aviso);
+    this.c.pulsar = (id, entidad) => {
+      if (!this.c.avisos.tocar(id)) {
+        this.actual?.alTocar?.(this.c, id, entidad);
+      }
+    };
+    this.c.avisos.alAccion = (aviso) => {
+      // El aviso de "la zona empeoró" solo se confirma, en cualquier escena.
+      if (aviso.id === 'oriente-empeora') {
+        this.c.avisos.resolver(aviso.id);
+        return;
+      }
+      this.actual?.alAviso?.(this.c, aviso);
+    };
 
     // Tocar o agarrar: empieza con "presionado" o "agarrado" (lo que llegue
     // primero) y termina cuando ya no queda ninguno de los dos.
@@ -100,6 +120,7 @@ export class GuionSystem extends createSystem({
     c.mostrarPanel(false);
     c.avisos.reiniciar();
     c.llegadas.reiniciar();
+    c.zonas.reiniciar();
     c.mostrar(c.mesa, false);
     this.enMano.clear();
     c.leerCabeza();
@@ -116,7 +137,7 @@ export class GuionSystem extends createSystem({
       c.estado.escena = 'CONTINUARA';
       c.gato.animar('quieto');
       c.gato.decir(
-        'Hasta aquí va esta versión. Pronto: las necesidades de cada zona y la urgencia por lluvias en Oriente.',
+        'Hasta aquí va esta versión. Pronto: armar la caja a mano y el cierre de la semana con la carta del lote.',
         'Continuará',
       );
       return;
@@ -183,6 +204,7 @@ export class GuionSystem extends createSystem({
     c.anim.actualizar(dt);
     this.actual?.actualizar?.(c, dt);
     c.avisos.actualizar(dt);
+    c.zonas.actualizar(dt);
     c.gato.actualizar(c.tiempo, c.cabeza);
   }
 }

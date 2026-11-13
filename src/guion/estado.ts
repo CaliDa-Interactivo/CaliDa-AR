@@ -52,7 +52,7 @@ export function estadoInicial(): Estado {
       Sur: 'necesita',
       Oriente: 'necesita',
       Occidente: 'no_necesita',
-      Centro: 'necesita',
+      Centro: 'urgente',
     },
     avisos: [],
     misiones: [],

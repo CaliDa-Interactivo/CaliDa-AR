@@ -28,6 +28,7 @@ import { Manos } from './manos.js';
 import { crearMaqueta, type Maqueta } from './maqueta.js';
 import { Llegadas } from './llegadas.js';
 import { Notificaciones } from './notificaciones.js';
+import { Zonas } from './zonas.js';
 import type { Aviso } from './estado.js';
 
 /** Una escena de la máquina de estados. */
@@ -60,6 +61,10 @@ export class Contexto {
   readonly avisos: Notificaciones;
   /** Cajas que llegan y objetos para surtir la estantería. */
   readonly llegadas: Llegadas;
+  /** Burbujas, lluvia y misión sobre el mapa. */
+  readonly zonas: Zonas;
+  /** Trata un toque con la punta del índice igual que un toque normal. */
+  pulsar: (id: string, entidad: Entity) => void = () => undefined;
   readonly mesa: Entity;
   readonly mesaArmada: MesaArmada;
   /** Punto de la mesa que encontró la escena 1. */
@@ -91,6 +96,7 @@ export class Contexto {
     this.tocable(this.gato.entidad, 'gato');
     this.avisos = new Notificaciones(this);
     this.llegadas = new Llegadas(this);
+    this.zonas = new Zonas(this);
     void this.armarPanel();
   }
 

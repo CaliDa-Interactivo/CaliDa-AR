@@ -12,14 +12,14 @@ const aviso = document.getElementById('aviso') as HTMLParagraphElement;
 const estadoWebXR = document.getElementById('webxr') as HTMLParagraphElement;
 // ?prueba: recorrido con el mouse en el computador, sin la pantalla de entrada.
 const enPrueba = new URLSearchParams(window.location.search).has('prueba');
-const conGuion = new URLSearchParams(window.location.search).has('guion');
+// El guion "Cali en tu mesa" es la experiencia principal. Con ?anterior se
+// abre el primer recorrido (donante → beneficiario), que se conserva.
+const conGuion = !new URLSearchParams(window.location.search).has('anterior');
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 ).then(async (world) => {
-  // ?guion: el guion nuevo "Cali en tu mesa" (en construcción, escena por
-  // escena). Sin eso se abre el recorrido anterior, que sigue completo.
   if (conGuion) {
     world.registerSystem(GuionSystem);
   } else {

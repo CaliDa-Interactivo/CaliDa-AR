@@ -99,6 +99,9 @@ export class Llegadas {
   private siluetas: Mesh[][] = [];
   private contadores: Etiqueta[] = [];
   private ocupados: number[] = [];
+  /** Cuántos se han sacado de cada repisa para despachar. */
+  private sacados: number[] = [];
+  private resaltadas = new Set<Categoria>();
   private bandeja: Entity;
   private rojo = new MeshBasicMaterial({ color: COLOR.rojo, side: BackSide });
   private v = new Vector3();
@@ -127,6 +130,7 @@ export class Llegadas {
       c.maqueta.raiz.add(contador.malla);
       this.contadores.push(contador);
       this.ocupados.push(0);
+      this.sacados.push(0);
     });
 
     // Bandeja de descarte.
@@ -265,6 +269,8 @@ export class Llegadas {
       obj.scale.setScalar(OCULTO);
     }
     this.ocupados.fill(0);
+    this.sacados.fill(0);
+    this.resaltadas.clear();
     this.siluetas.forEach((fila) => fila.forEach((m) => (m.visible = false)));
     this.contadores.forEach((contador) => (contador.malla.visible = false));
     this.bandeja.object3D!.visible = false;
@@ -274,11 +280,15 @@ export class Llegadas {
 
   private pintarContadores(): void {
     CATEGORIAS.forEach((categoria, k) => {
-      this.c.estado.inventario[categoria.id] = this.ocupados[k];
+      const hay = this.ocupados[k] - this.sacados[k];
+      this.c.estado.inventario[categoria.id] = hay;
+      // Las repisas de una misión urgente se iluminan en rojo.
+      const urgente = this.resaltadas.has(categoria.id);
       this.contadores[k].escribir(
-        `${categoria.nombre} ${this.ocupados[k]}/${PUESTOS_POR_REPISA}`,
-        this.ocupados[k] === PUESTOS_POR_REPISA ? '#3E7A6C' : COLOR.petroleo,
+        `${urgente ? '¡' : ''}${categoria.nombre} ${hay}/${PUESTOS_POR_REPISA}${urgente ? '!' : ''}`,
+        urgente ? COLOR.rojo : hay === PUESTOS_POR_REPISA ? '#3E7A6C' : COLOR.petroleo,
       );
+      this.contadores[k].malla.scale.setScalar(urgente ? 1.25 : 1);
     });
   }
 
@@ -405,6 +415,37 @@ export class Llegadas {
         obj.scale.setScalar(OCULTO);
       },
     });
+  }
+
+  /** Ilumina las repisas que pide una misión (lista vacía: ninguna). */
+  resaltar(categorias: Categoria[]): void {
+    this.resaltadas = new Set(categorias);
+    this.pintarContadores();
+  }
+
+  /** Saca de su repisa un objeto de ese producto y lo lleva a `destino`. */
+  sacar(productoId: string, destino: Vector3): boolean {
+    const objeto =
+      this.objetos.find((o) => o.lugar === 'repisa' && PRODUCTOS[o.producto].id === productoId) ??
+      this.objetos.find(
+        (o) => o.lugar === 'repisa' && o.categoria === PRODUCTOS.find((p) => p.id === productoId)?.categoria,
+      );
+    if (!objeto) {
+      return false;
+    }
+    objeto.lugar = 'descarte';
+    this.sacados[CATEGORIAS.findIndex((k) => k.id === objeto.categoria)]++;
+    const obj = objeto.entidad.object3D!;
+    this.c.anim.mover(obj, destino, 0.9, {
+      arco: 0.18,
+      escala: 0.3,
+      fin: () => {
+        obj.visible = false;
+        obj.scale.setScalar(OCULTO);
+      },
+    });
+    this.pintarContadores();
+    return true;
   }
 
   /** Rebota: vuelve a su sitio sobre la caja. */

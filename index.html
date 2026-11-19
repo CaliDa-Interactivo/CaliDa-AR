@@ -68,12 +68,76 @@
         margin: 0 0 8px;
         font-weight: 700;
       }
+      #paso-multi .roles {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .rol,
+      #crear,
+      #unirse,
+      #volver-modo {
+        font: 700 14px Roboto, sans-serif;
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 16px;
+        cursor: pointer;
+        background: #e8e1d5;
+        color: #011e41;
+      }
+      .rol.activo {
+        background: #426d8c;
+        color: #fff8ed;
+      }
+      #crear {
+        background: #011e41;
+        color: #fff8ed;
+      }
+      .unirse {
+        display: flex;
+        gap: 8px;
+        margin: 10px 0;
+      }
+      #codigo {
+        width: 90px;
+        font: 700 16px Roboto, sans-serif;
+        border: 2px solid #e8e1d5;
+        border-radius: 12px;
+        padding: 8px 10px;
+        letter-spacing: 3px;
+      }
+      #estado-sala {
+        margin: 6px 0 10px;
+        font-size: 14px;
+        min-height: 20px;
+      }
+      #entrar-multi {
+        font: 700 16px Roboto, sans-serif;
+        color: #fff6e6;
+        background: #cc0100;
+        border: 0;
+        border-radius: 999px;
+        padding: 14px 26px;
+        cursor: pointer;
+        box-shadow: 0 5px 0 #a5121a;
+        margin-right: 8px;
+      }
+      #entrar-multi:disabled {
+        background: #b8ad9c;
+        box-shadow: 0 5px 0 #8f8678;
+        cursor: default;
+      }
+      #paso-multi[hidden],
+      #paso-modo[hidden] {
+        display: none;
+      }
       #multi {
         display: block;
         margin-top: 10px;
         font: 700 14px Roboto, sans-serif;
-        color: #514b46;
-        background: #e8e1d5;
+        color: #fff8ed;
+        background: #426d8c;
+        cursor: pointer;
         border: 0;
         border-radius: 999px;
         padding: 10px 20px;
@@ -104,9 +168,26 @@
         manos: cierra la mano (puño) para agarrar y empuja los botones con la
         punta del índice.
       </p>
-      <p class="modo">Elige el modo:</p>
-      <button id="entrar" type="button">Un jugador · Entrar en RA</button>
-      <button id="multi" type="button" disabled>Multijugador (próximamente)</button>
+      <div id="paso-modo">
+        <p class="modo">Elige el modo:</p>
+        <button id="entrar" type="button">Un jugador · Entrar en RA</button>
+        <button id="multi" type="button">Multijugador (2 Quest)</button>
+      </div>
+      <div id="paso-multi" hidden>
+        <p class="modo">Si creas la sala, elige tu rol (el otro jugador tendrá el contrario):</p>
+        <div class="roles">
+          <button type="button" class="rol activo" data-rol="receptor">Receptor</button>
+          <button type="button" class="rol" data-rol="despachador">Despachador</button>
+        </div>
+        <button id="crear" type="button">Crear sala</button>
+        <div class="unirse">
+          <input id="codigo" inputmode="numeric" maxlength="4" placeholder="Código" />
+          <button id="unirse" type="button">Unirse</button>
+        </div>
+        <p id="estado-sala"></p>
+        <button id="entrar-multi" type="button" disabled>Entrar en RA</button>
+        <button id="volver-modo" type="button">Volver</button>
+      </div>
       <p id="webxr">Comprobando WebXR…</p>
     </div>
     <script type="module" src="/src/index.ts"></script>

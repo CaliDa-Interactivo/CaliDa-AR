@@ -61,6 +61,7 @@ export class Escena {
   readonly repisa = new Repisa();
   readonly panel = new Panel();
   readonly camion: Group;
+  readonly pedestal: Mesh;
   readonly botonDespacho = new Boton3D('Despachar', 0.13, 0.07, COLOR.rojo);
   readonly letreroDespacho = new Lienzo(640, 140, 0.2);
   readonly reloj = new Lienzo(900, 150, 0.42);
@@ -132,9 +133,9 @@ export class Escena {
     this.camion.position.copy(CAMION);
     this.camion.rotation.y = Math.PI / 2;
     this.sobre.add(this.camion);
-    const pedestal = new Mesh(new BoxGeometry(0.17, 0.05, 0.11), mate(COLOR.carbon));
-    pedestal.position.set(0.68, 0.025, -0.12);
-    this.sobre.add(pedestal);
+    this.pedestal = new Mesh(new BoxGeometry(0.17, 0.05, 0.11), mate(COLOR.carbon));
+    this.pedestal.position.set(0.68, 0.025, -0.12);
+    this.sobre.add(this.pedestal);
     this.botonDespacho.grupo.position.set(0.68, 0.055, -0.12);
     mirarAlCentro(this.botonDespacho.grupo);
     this.botonDespacho.grupo.rotation.x = -1.05;

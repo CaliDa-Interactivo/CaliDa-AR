@@ -35,6 +35,7 @@ import {
   INVENTARIO_INICIAL,
   JORNADAS,
   MAX_PILA,
+  type Evento,
   MENSAJE_FINAL,
   PESO_CATEGORIA,
   indiceCategoria,
@@ -52,15 +53,16 @@ import {
 } from './escena.js';
 import { Interaccion, type Agarrable, type Destino } from './interaccion.js';
 import { Manos } from './manos.js';
-import { completo, faltantes, type Aviso, type Pedido } from './modelo.js';
+import { completo, cuentaNueva, estrellasDe, faltantes, type Aviso, type Cuenta, type Pedido } from './modelo.js';
+export { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
 import { Objeto } from './objetos.js';
 import { reloj, textoPedido } from './panel.js';
 import { ESCALA_REPISA } from './repisa.js';
 import { Boton3D, FUENTE, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
 
-type Fase = 'inicio' | 'colocar' | 'jornada' | 'resumen' | 'semana';
+export type Fase = 'inicio' | 'colocar' | 'espera' | 'jornada' | 'resumen' | 'semana';
 
-interface CajaD {
+export interface CajaD {
   armada: CajaArmada;
   grupo: Group;
   objetos: { cat: IdCategoria; danado: boolean }[];
@@ -68,95 +70,70 @@ interface CajaD {
   minis: Group[];
 }
 
-interface ObjetoJuego {
+export interface ObjetoJuego {
   o: Objeto;
   origen: 'caja' | 'repisa';
   ag: Agarrable;
 }
 
-interface Cuenta {
-  pedidos: number;
-  aTiempo: number;
-  tarde: number;
-  sinEntregar: number;
-  rechazadas: number;
-  perdidas: number;
-  errores: number;
-  quejas: number;
-  familias: number;
-  puntos: number;
-  estrellas: number;
-}
-
-const cuentaNueva = (): Cuenta => ({
-  pedidos: 0,
-  aTiempo: 0,
-  tarde: 0,
-  sinEntregar: 0,
-  rechazadas: 0,
-  perdidas: 0,
-  errores: 0,
-  quejas: 0,
-  familias: 0,
-  puntos: 0,
-  estrellas: 0,
-});
-
 const nombre = (id: IdCategoria) => CATEGORIAS.find((c) => c.id === id)!.corto;
 const dxz = (a: Vector3, b: Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
 
 export class OficinaSystem extends createSystem({}) {
-  private modoPrueba = new URLSearchParams(window.location.search).has('prueba');
-  private escena = new Escena();
-  private raizEnt!: Entity;
-  private anim = new Animador();
-  private manos = new Manos();
-  private inter!: Interaccion;
-  private gato!: Gato;
-  private ancla = new AnclaWebXR();
-  private inicio = new Group();
-  private colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.06, COLOR.rojo);
+  protected modoPrueba = new URLSearchParams(window.location.search).has('prueba');
+  protected escena = new Escena();
+  protected raizEnt!: Entity;
+  protected anim = new Animador();
+  protected manos = new Manos();
+  protected inter!: Interaccion;
+  protected gato!: Gato;
+  protected ancla = new AnclaWebXR();
+  protected inicio = new Group();
+  protected colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.06, COLOR.rojo);
 
-  private fase: Fase = 'inicio';
-  private tiempo = 0;
-  private reinicioEn = -1;
-  private cabeza = new Vector3();
-  private frente = new Vector3();
+  protected fase: Fase = 'inicio';
+  protected tiempo = 0;
+  protected reinicioEn = -1;
+  protected cabeza = new Vector3();
+  protected frente = new Vector3();
 
   // Jornada
-  private dia = 0;
-  private tDia = 0;
-  private siguienteEvento = 0;
-  private cuentas: Cuenta[] = [];
-  private avisos: Aviso[] = [];
-  private pedidos: Pedido[] = [];
-  private idAviso = 0;
-  private cola = 0;
-  private tCola = 0;
-  private pila: CajaD[] = [];
-  private trabajo: CajaD | null = null;
-  private sueltos: ObjetoJuego[] = [];
-  private actual: ObjetoJuego | null = null;
-  private zonaMarcada = -1;
-  private tPintar = 0;
+  protected dia = 0;
+  protected tDia = 0;
+  protected siguienteEvento = 0;
+  protected cuentas: Cuenta[] = [];
+  protected avisos: Aviso[] = [];
+  protected pedidos: Pedido[] = [];
+  protected idAviso = 0;
+  protected cola = 0;
+  protected tCola = 0;
+  protected pila: CajaD[] = [];
+  protected trabajo: CajaD | null = null;
+  protected sueltos: ObjetoJuego[] = [];
+  protected actual: ObjetoJuego | null = null;
+  protected zonaMarcada = -1;
+  protected tPintar = 0;
 
   // Caja del pedido y camión
-  private cajaPedido!: CajaArmada;
-  private cajaEnCamion = false;
-  private minisPedido: Group[] = [];
-  private camion: 'listo' | 'yendo' | 'fuera' | 'volviendo' = 'listo';
-  private tCamion = 0;
-  private baseCamion = new Vector3();
+  protected cajaPedido!: CajaArmada;
+  protected cajaEnCamion = false;
+  protected minisPedido: Group[] = [];
+  protected camion: 'listo' | 'yendo' | 'fuera' | 'volviendo' = 'listo';
+  /** Despachador (multijugador): al llevar la caja al camión aparece otra. */
+  protected cajaInfinita = false;
+  protected copiaCaja: Object3D | null = null;
+  protected tCamion = 0;
+  protected baseCamion = new Vector3();
 
   // Tutorial (lunes)
-  private tutorial = true;
-  private vistas = new Set<string>();
-  private flechaHasta = 0;
-  private flechaEn = new Vector3();
+  protected tutorial = true;
+  protected vistas = new Set<string>();
+  protected flechaHasta = 0;
+  protected flechaEn = new Vector3();
 
-  private v = new Vector3();
-  private w = new Vector3();
-  private giro = new Quaternion();
+  protected v = new Vector3();
+  protected w = new Vector3();
+  protected giro = new Quaternion();
 
   init(): void {
     const mundo = this.world;
@@ -208,11 +185,11 @@ export class OficinaSystem extends createSystem({}) {
     this.reiniciar();
   }
 
-  private enXR(): boolean {
+  protected enXR(): boolean {
     return this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
   }
 
-  private leerCabeza(): void {
+  protected leerCabeza(): void {
     const origen = this.enXR() ? this.player.head : this.world.camera;
     origen.getWorldPosition(this.cabeza);
     // Hacia dónde mira: el eje -Z de la cabeza (o de la cámara).
@@ -226,7 +203,7 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Reinicio y colocación --------------------------------------
 
-  private reiniciar(): void {
+  protected reiniciar(): void {
     this.anim.limpiar();
     this.inter.soltarTodo();
     this.ancla.soltar();
@@ -251,7 +228,7 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** Pone el botón y el gato frente a la persona. */
-  private mostrarInicio(): void {
+  protected mostrarInicio(): void {
     this.leerCabeza();
     const raiz = this.escena.raiz;
     raiz.position.set(this.cabeza.x, 0, this.cabeza.z);
@@ -268,7 +245,7 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** Arma la oficina donde está la persona, mirando hacia donde mira. */
-  private colocar(): void {
+  protected colocar(): void {
     this.leerCabeza();
     const raiz = this.escena.raiz;
     raiz.position.set(this.cabeza.x, 0, this.cabeza.z);
@@ -304,13 +281,18 @@ export class OficinaSystem extends createSystem({}) {
       this.fase = 'jornada';
       this.gato.decir('Listo, oficina en su nuevo lugar.');
     } else {
-      this.empezarJornada();
+      this.trasColocar();
     }
+  }
+
+  /** Qué pasa la primera vez que se coloca la oficina. */
+  protected trasColocar(): void {
+    this.empezarJornada();
   }
 
   // ---- Jornada -------------------------------------------------------
 
-  private limpiarJornada(): void {
+  protected limpiarJornada(): void {
     this.tDia = 0;
     this.siguienteEvento = 0;
     this.avisos = [];
@@ -331,15 +313,19 @@ export class OficinaSystem extends createSystem({}) {
     this.sueltos = [];
     this.actual = null;
     this.vaciarCajaPedido();
+    this.copiaCaja?.removeFromParent();
+    this.copiaCaja = null;
     this.camion = 'listo';
     this.escena.camion.visible = true;
+    this.escena.camion.position.copy(this.baseCamion);
+    this.escena.camion.scale.setScalar(0.75);
     this.escena.panel.verAvisos();
     this.escena.resumen.visible = false;
     this.escena.pregunta.visible = false;
     this.escena.flecha.visible = false;
   }
 
-  private empezarJornada(): void {
+  protected empezarJornada(): void {
     this.limpiarJornada();
     this.fase = 'jornada';
     this.cuentas[this.dia] = cuentaNueva();
@@ -359,7 +345,7 @@ export class OficinaSystem extends createSystem({}) {
     this.gato.animar('saludar', 2.5, this.tiempo);
   }
 
-  private hora(): string {
+  protected hora(): string {
     const k = Math.min(1, this.tDia / JORNADAS[this.dia].duracion);
     const h = 8 + 9 * k;
     const hh = Math.floor(h);
@@ -368,7 +354,7 @@ export class OficinaSystem extends createSystem({}) {
     return `${h12}:${String(mm).padStart(2, '0')} ${hh >= 12 ? 'p. m.' : 'a. m.'}`;
   }
 
-  private avisar(aviso: Omit<Aviso, 'id' | 'estado' | 'hechoEn'>): Aviso {
+  protected avisar(aviso: Omit<Aviso, 'id' | 'estado' | 'hechoEn'>): Aviso {
     const nuevo: Aviso = { ...aviso, id: ++this.idAviso, estado: 'pendiente', hechoEn: 0 };
     this.avisos.push(nuevo);
     sonidos.campana();
@@ -376,15 +362,21 @@ export class OficinaSystem extends createSystem({}) {
     return nuevo;
   }
 
-  private resolver(aviso: Aviso): void {
+  protected resolver(aviso: Aviso): void {
     aviso.estado = 'hecho';
     aviso.hechoEn = this.tiempo;
   }
 
-  private dispararEventos(): void {
+  protected dispararEventos(): void {
     const eventos = JORNADAS[this.dia].eventos;
     while (this.siguienteEvento < eventos.length && this.tDia >= eventos[this.siguienteEvento].en) {
-      const e = eventos[this.siguienteEvento++];
+      this.evento(eventos[this.siguienteEvento++]);
+    }
+  }
+
+  /** Un evento de la línea de tiempo (cajas o pedido). */
+  protected evento(e: Evento): void {
+    {
       if (e.tipo === 'cajas') {
         this.avisar({
           tipo: 'cajas',
@@ -426,7 +418,7 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Cajas que llegan ---------------------------------------------
 
-  private nuevaCaja(): void {
+  protected nuevaCaja(dadas?: CajaD['objetos']): void {
     if (this.pila.length >= MAX_PILA) {
       this.cuenta.perdidas++;
       sonidos.error();
@@ -435,6 +427,10 @@ export class OficinaSystem extends createSystem({}) {
       return;
     }
     const jornada = JORNADAS[this.dia];
+    if (dadas) {
+      this.ponerCaja(dadas);
+      return;
+    }
     const [min, max] = jornada.porCaja;
     const n = min + Math.floor(Math.random() * (max - min + 1));
     const objetos: CajaD['objetos'] = [];
@@ -455,6 +451,10 @@ export class OficinaSystem extends createSystem({}) {
     if (this.dia > 0 && !objetos.some((o) => o.danado)) {
       objetos[0].danado = true;
     }
+    this.ponerCaja(objetos);
+  }
+
+  protected ponerCaja(objetos: CajaD['objetos']): void {
     const armada = crearCaja(true);
     armada.solapas.visible = false;
     armada.tapa.visible = true;
@@ -473,12 +473,12 @@ export class OficinaSystem extends createSystem({}) {
     }
   }
 
-  private puestoPila(i: number, salida: Vector3): Vector3 {
+  protected puestoPila(i: number, salida: Vector3): Vector3 {
     const base = PILA[i % 2];
     return salida.set(base.x, Math.floor(i / 2) * ALTO_CAJA * 1.03, base.z);
   }
 
-  private reacomodarPila(): void {
+  protected reacomodarPila(): void {
     this.pila.forEach((c, i) => {
       const p = this.puestoPila(i, this.v);
       if (c.grupo.position.distanceTo(p) > 0.005) {
@@ -487,7 +487,7 @@ export class OficinaSystem extends createSystem({}) {
     });
   }
 
-  private registrarCaja(caja: CajaD): void {
+  protected registrarCaja(caja: CajaD): void {
     const ag: Agarrable = {
       obj: caja.grupo,
       activo: () =>
@@ -520,7 +520,7 @@ export class OficinaSystem extends createSystem({}) {
     this.inter.agarrables.push(ag);
   }
 
-  private abrirCaja(caja: CajaD): void {
+  protected abrirCaja(caja: CajaD): void {
     caja.estado = 'abierta';
     caja.armada.tapa.visible = false;
     caja.armada.solapas.visible = true;
@@ -530,7 +530,7 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** Los objetos que se asoman dentro de la caja abierta. */
-  private pintarMinis(caja: CajaD): void {
+  protected pintarMinis(caja: CajaD): void {
     caja.minis.forEach((m) => m.removeFromParent());
     caja.minis = caja.objetos.slice(0, 4).map((o, i) => {
       const mini = new Objeto(o.cat, false).grupo;
@@ -543,7 +543,7 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Objetos sueltos -----------------------------------------------
 
-  private nuevoObjeto(cat: IdCategoria, danado: boolean, origen: 'caja' | 'repisa'): ObjetoJuego {
+  protected nuevoObjeto(cat: IdCategoria, danado: boolean, origen: 'caja' | 'repisa'): ObjetoJuego {
     const o = new Objeto(cat, danado);
     this.escena.sobre.add(o.grupo);
     const oj: ObjetoJuego = { o, origen, ag: null as unknown as Agarrable };
@@ -561,7 +561,7 @@ export class OficinaSystem extends createSystem({}) {
     return oj;
   }
 
-  private quitarObjeto(oj: ObjetoJuego): void {
+  protected quitarObjeto(oj: ObjetoJuego): void {
     this.quitarAgarrable(oj.ag);
     this.sueltos = this.sueltos.filter((s) => s !== oj);
     if (this.actual === oj) {
@@ -571,14 +571,14 @@ export class OficinaSystem extends createSystem({}) {
     oj.o.grupo.removeFromParent();
   }
 
-  private quitarAgarrable(ag: Agarrable): void {
+  protected quitarAgarrable(ag: Agarrable): void {
     const i = this.inter.agarrables.indexOf(ag);
     if (i >= 0) {
       this.inter.agarrables.splice(i, 1);
     }
   }
 
-  private registrarAgarrables(): void {
+  protected registrarAgarrables(): void {
     const e = this.escena;
     // La tapa de la caja de trabajo: se jala para abrirla.
     let tapaInicio = new Vector3();
@@ -654,7 +654,7 @@ export class OficinaSystem extends createSystem({}) {
         obj: zona,
         activo: () => this.fase === 'jornada' && e.repisa.cantidades[i] > 0,
         tomar: (mano) => {
-          const r = e.repisa.quitar(i);
+          const r = this.repisaQuitar(i);
           if (!r) {
             return null;
           }
@@ -691,12 +691,12 @@ export class OficinaSystem extends createSystem({}) {
     this.inter.agarrables.push(pedido);
   }
 
-  private deGrupo(obj: Object3D): ObjetoJuego {
+  protected deGrupo(obj: Object3D): ObjetoJuego {
     return this.sueltos.find((s) => s.o.grupo === obj)!;
   }
 
   /** Mientras se lleva un objeto: ¿dónde se soltaría? */
-  private destinoObjeto(oj: ObjetoJuego | undefined): Destino {
+  protected destinoObjeto(oj: ObjetoJuego | undefined): Destino {
     if (!oj) {
       return null;
     }
@@ -728,12 +728,12 @@ export class OficinaSystem extends createSystem({}) {
     return resultado;
   }
 
-  private sobreCajaPedido(p: Vector3): boolean {
+  protected sobreCajaPedido(p: Vector3): boolean {
     return !this.cajaEnCamion && dxz(p, PEDIDO) < 0.13 && p.y < 0.3;
   }
 
   /** Al soltar un objeto: caneca, fila de la repisa, caja del pedido o cae. */
-  private soltarObjeto(oj: ObjetoJuego | undefined): void {
+  protected soltarObjeto(oj: ObjetoJuego | undefined): void {
     if (!oj) {
       return;
     }
@@ -771,10 +771,10 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** Rebota: lo que salió de la repisa vuelve a ella; lo de la caja, junto a la caja. */
-  private devolver(oj: ObjetoJuego): void {
+  protected devolver(oj: ObjetoJuego): void {
     if (oj.origen === 'repisa') {
       const i = indiceCategoria(oj.o.cat);
-      this.alPuesto(oj, i, () => this.escena.repisa.agregar(i, oj.o.danado));
+      this.alPuesto(oj, i, () => this.repisaAgregar(i, oj.o.danado));
     } else {
       const casa = new Vector3(TRABAJO.x + 0.16, 0, TRABAJO.z + 0.06);
       this.anim.mover(oj.o.grupo, casa, 0.4, { arco: 0.08 });
@@ -782,7 +782,7 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** Anima el objeto hasta el siguiente puesto libre de su fila y lo quita. */
-  private alPuesto(oj: ObjetoJuego, i: number, alFinal: () => void): void {
+  protected alPuesto(oj: ObjetoJuego, i: number, alFinal: () => void): void {
     const e = this.escena;
     oj.o.clasificado = true;
     this.quitarAgarrable(oj.ag);
@@ -798,10 +798,24 @@ export class OficinaSystem extends createSystem({}) {
     });
   }
 
-  private aRepisa(oj: ObjetoJuego): void {
+  /** Pone un objeto en su fila (en multijugador, también en la del compañero). */
+  protected repisaAgregar(i: number, danado: boolean): boolean {
+    return this.escena.repisa.agregar(i, danado);
+  }
+
+  protected repisaQuitar(i: number): { danado: boolean } | null {
+    return this.escena.repisa.quitar(i);
+  }
+
+  /** ¿La fila está llena? */
+  protected filaLlena(i: number): boolean {
+    return this.escena.repisa.lleno(i);
+  }
+
+  protected aRepisa(oj: ObjetoJuego): void {
     const e = this.escena;
     const i = indiceCategoria(oj.o.cat);
-    if (e.repisa.lleno(i)) {
+    if (this.filaLlena(i)) {
       this.rechazar(oj);
       return;
     }
@@ -816,10 +830,10 @@ export class OficinaSystem extends createSystem({}) {
       }
     }
     sonidos.clic();
-    this.alPuesto(oj, i, () => e.repisa.agregar(i, oj.o.danado));
+    this.alPuesto(oj, i, () => this.repisaAgregar(i, oj.o.danado));
   }
 
-  private aCaneca(oj: ObjetoJuego): void {
+  protected aCaneca(oj: ObjetoJuego): void {
     oj.o.clasificado = true;
     this.quitarAgarrable(oj.ag);
     if (oj.o.danado) {
@@ -836,7 +850,7 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** La fila está llena: la donación no se puede recibir. */
-  private rechazar(oj: ObjetoJuego): void {
+  protected rechazar(oj: ObjetoJuego): void {
     oj.o.clasificado = true;
     this.quitarAgarrable(oj.ag);
     oj.o.contorno.poner(COLOR.rojo);
@@ -854,11 +868,11 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Pedido: caja, camión y despacho ------------------------------
 
-  private enCurso(): Pedido | undefined {
+  protected enCurso(): Pedido | undefined {
     return this.pedidos.find((p) => p.estado === 'curso');
   }
 
-  private armarCajaPedido(): void {
+  protected armarCajaPedido(): void {
     this.cajaPedido = crearCaja(true);
     this.cajaPedido.solapas.visible = true;
     this.cajaPedido.tapa.visible = false;
@@ -869,7 +883,7 @@ export class OficinaSystem extends createSystem({}) {
     this.baseCamion.copy(this.escena.camion.position);
   }
 
-  private vaciarCajaPedido(): void {
+  protected vaciarCajaPedido(): void {
     const caja = this.cajaPedido.raiz;
     this.minisPedido.forEach((m) => m.removeFromParent());
     this.minisPedido = [];
@@ -880,11 +894,9 @@ export class OficinaSystem extends createSystem({}) {
     caja.scale.setScalar(ESCALA_CAJA);
     caja.visible = true;
     this.cajaEnCamion = false;
-    this.escena.camion.position.copy(this.baseCamion);
-    this.escena.camion.scale.setScalar(0.75);
   }
 
-  private aPedido(oj: ObjetoJuego): void {
+  protected aPedido(oj: ObjetoJuego): void {
     const p = this.enCurso();
     const cat = oj.o.cat;
     if (!p || (p.pide[cat] ?? 0) <= (p.lleva[cat] ?? 0)) {
@@ -925,7 +937,7 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** Por qué no se puede despachar todavía (null: sí se puede). */
-  private bloqueoDespacho(): string | null {
+  protected bloqueoDespacho(): string | null {
     const p = this.enCurso();
     if (this.camion !== 'listo') {
       return 'El camión está en ruta';
@@ -943,7 +955,7 @@ export class OficinaSystem extends createSystem({}) {
     return null;
   }
 
-  private despachar(): void {
+  protected despachar(): void {
     const p = this.enCurso();
     if (!p || this.bloqueoDespacho()) {
       return;
@@ -973,6 +985,15 @@ export class OficinaSystem extends createSystem({}) {
     this.resolver(nuevo);
     nuevo.hechoEn = this.tiempo + 3;
     sonidos.camion();
+    if (this.cajaInfinita) {
+      // Al sacar la caja aparece otra vacía en su lugar; el camión lleva una copia.
+      const caja = this.cajaPedido.raiz;
+      this.copiaCaja = caja.clone(true);
+      this.escena.camion.add(this.copiaCaja);
+      this.vaciarCajaPedido();
+      caja.scale.setScalar(0.02);
+      this.anim.mover(caja, null, 0.4, { escala: ESCALA_CAJA });
+    }
     this.camion = 'yendo';
     this.tCamion = 0;
     this.gato.animar('aplaudir', 2.5, this.tiempo);
@@ -985,7 +1006,7 @@ export class OficinaSystem extends createSystem({}) {
     );
   }
 
-  private moverCamion(dt: number): void {
+  protected moverCamion(dt: number): void {
     const camion = this.escena.camion;
     this.tCamion += dt;
     if (this.camion === 'yendo') {
@@ -998,21 +1019,27 @@ export class OficinaSystem extends createSystem({}) {
         camion.visible = false;
       }
     } else if (this.camion === 'fuera' && this.tCamion > 4) {
-      this.vaciarCajaPedido();
+      camion.position.copy(this.baseCamion);
+      if (this.copiaCaja) {
+        this.copiaCaja.removeFromParent();
+        this.copiaCaja = null;
+      } else {
+        this.vaciarCajaPedido();
+        const caja = this.cajaPedido.raiz;
+        caja.scale.setScalar(0.02);
+        this.anim.mover(caja, null, 0.4, { escala: ESCALA_CAJA });
+      }
       camion.visible = true;
       camion.scale.setScalar(0.02);
       this.camion = 'volviendo';
       this.tCamion = 0;
       this.anim.mover(camion, null, 0.6, { escala: 0.75 });
-      const caja = this.cajaPedido.raiz;
-      caja.scale.setScalar(0.02);
-      this.anim.mover(caja, null, 0.4, { escala: ESCALA_CAJA });
     } else if (this.camion === 'volviendo' && this.tCamion > 0.7) {
       this.camion = 'listo';
     }
   }
 
-  private avanzarPedidos(dt: number): void {
+  protected avanzarPedidos(dt: number): void {
     for (const p of this.pedidos) {
       if (p.estado !== 'curso' && p.estado !== 'elegir') {
         continue;
@@ -1036,7 +1063,7 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Botones -------------------------------------------------------
 
-  private conectarBotones(): void {
+  protected conectarBotones(): void {
     const e = this.escena;
     const panel = e.panel;
     panel.alAccion = (aviso) => this.accionAviso(aviso);
@@ -1119,7 +1146,7 @@ export class OficinaSystem extends createSystem({}) {
     };
   }
 
-  private accionAviso(aviso: Aviso): void {
+  protected accionAviso(aviso: Aviso): void {
     const panel = this.escena.panel;
     if (aviso.tipo === 'cajas') {
       this.resolver(aviso);
@@ -1154,7 +1181,7 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Tutorial ------------------------------------------------------
 
-  private pista(clave: string, texto: string, objetivo: Vector3 | null): void {
+  protected pista(clave: string, texto: string, objetivo: Vector3 | null): void {
     if (!this.tutorial || this.vistas.has(clave)) {
       return;
     }
@@ -1167,29 +1194,28 @@ export class OficinaSystem extends createSystem({}) {
     }
   }
 
-  private puntoPanel(): Vector3 {
+  protected puntoPanel(): Vector3 {
     return this.escena.panel.grupo.position.clone().setY(this.escena.panel.grupo.position.y + 0.04);
   }
 
-  private puntoMundo(local: Vector3): Vector3 {
+  protected puntoMundo(local: Vector3): Vector3 {
     return this.escena.sobre.localToWorld(local.clone());
   }
 
   // ---- Resúmenes -----------------------------------------------------
 
-  private get cuenta(): Cuenta {
+  protected get cuenta(): Cuenta {
     return (this.cuentas[this.dia] ??= cuentaNueva());
   }
 
-  private terminarJornada(): void {
+  protected terminarJornada(): void {
     const c = this.cuenta;
     for (const p of this.pedidos) {
       if (p.estado !== 'entregado') {
         c.sinEntregar++;
       }
     }
-    const r = c.pedidos ? c.aTiempo / c.pedidos : 1;
-    c.estrellas = r >= 0.99 && c.errores <= 2 && c.quejas === 0 ? 3 : r >= 0.5 && c.errores <= 5 ? 2 : 1;
+    c.estrellas = estrellasDe(c);
     this.inter.soltarTodo();
     this.fase = 'resumen';
     sonidos.fin();
@@ -1202,7 +1228,7 @@ export class OficinaSystem extends createSystem({}) {
     this.gato.decir(`¡Terminó el ${DIAS[this.dia].toLowerCase()}! Mira cómo te fue.`);
   }
 
-  private estrellas(ctx: CanvasRenderingContext2D, n: number, x: number, y: number, r: number): void {
+  protected estrellas(ctx: CanvasRenderingContext2D, n: number, x: number, y: number, r: number): void {
     for (let i = 0; i < 3; i++) {
       ctx.fillStyle = i < n ? '#F2B84B' : '#D8D2C8';
       ctx.beginPath();
@@ -1215,18 +1241,8 @@ export class OficinaSystem extends createSystem({}) {
     }
   }
 
-  private pintarResumenDia(): void {
-    const l = this.escena.lienzoResumen;
-    const { ctx } = l;
-    const c = this.cuenta;
-    fondoPanel(l);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = COLOR.rojo;
-    ctx.font = `900 64px ${FUENTE}`;
-    ctx.fillText(`${DIAS[this.dia]} · Resumen de la jornada`, l.ancho / 2, 92);
-    this.estrellas(ctx, c.estrellas, l.ancho / 2 - 92, 160, 40);
-    const filas: [string, string][] = [
+  protected filasResumen(c: Cuenta): [string, string][] {
+    return [
       ['Pedidos entregados a tiempo', `${c.aTiempo} / ${c.pedidos}`],
       ['Entregados tarde', String(c.tarde)],
       ['Sin entregar', String(c.sinEntregar)],
@@ -1237,6 +1253,19 @@ export class OficinaSystem extends createSystem({}) {
       ['Familias ayudadas', String(c.familias)],
       ['Puntos', String(c.puntos)],
     ];
+  }
+
+  protected pintarResumenDia(c: Cuenta = this.cuenta, titulo?: string): void {
+    const l = this.escena.lienzoResumen;
+    const { ctx } = l;
+    fondoPanel(l);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = COLOR.rojo;
+    ctx.font = `900 64px ${FUENTE}`;
+    ctx.fillText(titulo ?? `${DIAS[this.dia]} · Resumen de la jornada`, l.ancho / 2, 92);
+    this.estrellas(ctx, c.estrellas, l.ancho / 2 - 92, 160, 40);
+    const filas = this.filasResumen(c);
     filas.forEach(([rotulo, valor], i) => {
       const y = 262 + i * 56;
       ctx.textAlign = 'left';
@@ -1251,7 +1280,7 @@ export class OficinaSystem extends createSystem({}) {
     l.listo();
   }
 
-  private verSemana(): void {
+  protected verSemana(): void {
     this.fase = 'semana';
     const l = this.escena.lienzoResumen;
     const { ctx } = l;
@@ -1328,9 +1357,8 @@ export class OficinaSystem extends createSystem({}) {
     this.carteles(dt);
   }
 
-  private jornada(dt: number): void {
-    this.tDia += dt;
-    this.dispararEventos();
+  protected jornada(dt: number): void {
+    this.avanzarReloj(dt);
     // Las cajas recibidas llegan de a una.
     if (this.cola > 0) {
       this.tCola += dt;
@@ -1363,13 +1391,22 @@ export class OficinaSystem extends createSystem({}) {
       this.sueltos.every((s) => s.o.clasificado) &&
       this.pedidos.every((p) => p.estado === 'entregado') &&
       this.avisos.every((a) => a.estado === 'hecho');
-    if (this.tDia >= JORNADAS[this.dia].duracion || (sinNada && this.tDia > 20)) {
+    if (this.debeTerminar(sinNada)) {
       this.terminarJornada();
     }
   }
 
+  protected avanzarReloj(dt: number): void {
+    this.tDia += dt;
+    this.dispararEventos();
+  }
+
+  protected debeTerminar(sinNada: boolean): boolean {
+    return this.tDia >= JORNADAS[this.dia].duracion || (sinNada && this.tDia > 20);
+  }
+
   /** Paneles y letreros (unas 5 veces por segundo) y lo que mira al jugador. */
-  private carteles(dt: number): void {
+  protected carteles(dt: number): void {
     const e = this.escena;
     if (e.flecha.visible) {
       e.flecha.position.copy(this.flechaEn).setY(this.flechaEn.y + 0.2 + Math.sin(this.tiempo * 5) * 0.025);

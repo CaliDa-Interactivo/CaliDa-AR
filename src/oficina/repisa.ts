@@ -51,6 +51,7 @@ export class Repisa {
   readonly zonas: Mesh[] = [];
   private bloques: InstancedMesh[][] = [];
   private letreros: Lienzo[] = [];
+  private estados: ({ texto: string; color: string } | null)[] = [];
   private v = new Vector3();
 
   constructor() {
@@ -162,6 +163,27 @@ export class Repisa {
     });
   }
 
+  /** Pone las cantidades exactas (las que manda el anfitrión). */
+  fijarExacto(cantidades: number[], danados: number[]): void {
+    cantidades.forEach((n, i) => {
+      const m = Math.max(0, Math.min(TOPE, n));
+      if (m !== this.cantidades[i] || danados[i] !== this.danados[i]) {
+        this.cantidades[i] = m;
+        this.danados[i] = Math.max(0, Math.min(m, danados[i] ?? 0));
+        this.mostrar(i);
+      }
+    });
+  }
+
+  /** Estado de cada categoría (multijugador): se ve en su letrero. */
+  fijarEstados(estados: ({ texto: string; color: string } | null)[]): void {
+    const antes = JSON.stringify(this.estados);
+    this.estados = estados;
+    if (JSON.stringify(estados) !== antes) {
+      this.pintar();
+    }
+  }
+
   private mostrar(i: number): void {
     for (const b of this.bloques[i]) {
       b.count = this.cantidades[i];
@@ -186,7 +208,19 @@ export class Repisa {
       ctx.fillStyle = COLOR.crema;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      textoAjustado(ctx, `${cat.corto}  ${n} / ${TOPE}${n >= TOPE ? '  llena' : ''}`, l.ancho / 2, l.alto / 2 + 2, l.ancho - 40, 52);
+      const estado = this.estados[i];
+      if (estado) {
+        // Píldora con el estado (se necesita / no / urgente) a la derecha.
+        ctx.fillStyle = estado.color;
+        ctx.beginPath();
+        ctx.roundRect(l.ancho - 200, 14, 186, l.alto - 28, 30);
+        ctx.fill();
+        ctx.fillStyle = COLOR.crema;
+        textoAjustado(ctx, estado.texto, l.ancho - 107, l.alto / 2 + 2, 170, 30);
+        textoAjustado(ctx, `${cat.corto}  ${n} / ${TOPE}`, (l.ancho - 200) / 2, l.alto / 2 + 2, l.ancho - 250, 46);
+      } else {
+        textoAjustado(ctx, `${cat.corto}  ${n} / ${TOPE}${n >= TOPE ? '  llena' : ''}`, l.ancho / 2, l.alto / 2 + 2, l.ancho - 40, 52);
+      }
       l.listo();
     });
   }

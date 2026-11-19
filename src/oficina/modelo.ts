@@ -48,3 +48,42 @@ export function faltantes(p: Pedido, nombres: (id: IdCategoria) => string): stri
 export function completo(p: Pedido): boolean {
   return (Object.entries(p.pide) as [IdCategoria, number][]).every(([id, n]) => (p.lleva[id] ?? 0) >= n);
 }
+
+// ---- Cuenta de cada jornada --------------------------------------
+
+export interface Cuenta {
+  pedidos: number;
+  aTiempo: number;
+  tarde: number;
+  sinEntregar: number;
+  rechazadas: number;
+  perdidas: number;
+  errores: number;
+  quejas: number;
+  familias: number;
+  puntos: number;
+  estrellas: number;
+  /** Multijugador: donantes atendidos por el receptor. */
+  atendidos: number;
+}
+
+export const cuentaNueva = (): Cuenta => ({
+  pedidos: 0,
+  aTiempo: 0,
+  tarde: 0,
+  sinEntregar: 0,
+  rechazadas: 0,
+  perdidas: 0,
+  errores: 0,
+  quejas: 0,
+  familias: 0,
+  puntos: 0,
+  estrellas: 0,
+  atendidos: 0,
+});
+
+/** De 1 a 3 estrellas según pedidos a tiempo y errores. */
+export function estrellasDe(c: Cuenta): number {
+  const r = c.pedidos ? c.aTiempo / c.pedidos : 1;
+  return r >= 0.99 && c.errores <= 2 && c.quejas === 0 ? 3 : r >= 0.5 && c.errores <= 5 ? 2 : 1;
+}

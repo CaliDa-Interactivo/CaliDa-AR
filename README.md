@@ -33,7 +33,19 @@ y el botón "Despachar".
   armar la caja desde la repisa → al camión → botón. Resumen diario con estrellas y resumen de la semana.
 - **Código:** `src/oficina/` (`juego.ts` es el sistema; `escena.ts`, `repisa.ts`, `panel.ts`,
   `interaccion.ts`, `manos.ts`, `objetos.ts`, `datos.ts` con las jornadas y municipios).
-- **Pendiente:** modo multijugador (receptor y despachador).
+- **Multijugador (2 Quest):** en la pantalla de inicio, "Multijugador" → quien crea la sala elige su
+  rol y recibe un código de 4 dígitos; el otro lo escribe y queda con el rol contrario. Conexión con
+  PeerJS (WebRTC; el servidor público de PeerJS solo los presenta). El anfitrión manda el reloj, la
+  repisa compartida, el estado de las categorías, el chat y los resúmenes.
+  - **Receptor:** donantes en fila con barra de paciencia y tarjeta (nombres y cédulas inventados);
+    se digita nombre, cédula, categoría y cantidad en el teclado virtual y se registra; si la fila
+    está llena se rechaza. Abre cajas y surte la repisa. A la derecha, el panel de estado.
+  - **Despachador:** pedidos con reloj en su computador, caja vacía infinita, camión y botón.
+  - **Chat** sobre el computador de los dos: mensajes rápidos y texto con el teclado virtual.
+  - Archivos: `red.ts` (PeerJS), `compartido.ts` (estado y reglas, sin three.js), `multi.ts`
+    (sistema), `multi-ui.ts` (teclado, chat, formulario, panel de estado, donantes).
+  - Prueba en el computador: `?prueba&multi=crear&rol=despachador` en una pestaña (el código
+    queda en el título) y `?prueba&multi=unir&sala=CÓDIGO` en otra.
 
 Otros recorridos que se conservan: `?guion` ("Cali en tu mesa") y `?anterior` (donante → beneficiario).
 

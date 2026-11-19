@@ -54,7 +54,13 @@ export const sonidos = {
   },
   error: () => nota(220, 140, 0.22, 'sawtooth', 0.1),
   // Oficina del centro de acopio.
-  agarrar: () => nota(260, 340, 0.08, 'sine', 0.14),
+  /** "Pop" suave al agarrar. */
+  agarrar: () => nota(380, 640, 0.07, 'sine', 0.15),
+  /** Soltar en el puesto correcto: dos notas que suben. */
+  acierto: () => {
+    nota(660, 660, 0.1, 'triangle', 0.13);
+    nota(990, 990, 0.16, 'triangle', 0.13, 0.08);
+  },
   soltar: () => nota(300, 180, 0.09, 'sine', 0.12),
   boton: () => nota(700, 520, 0.06, 'square', 0.07),
   bloqueado: () => nota(180, 150, 0.16, 'square', 0.08),

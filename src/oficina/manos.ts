@@ -5,6 +5,8 @@
 //    de las puntas de los dedos (índice, medio, anular y meñique)
 //    al centro de la palma: menos de ~4,5 cm = mano cerrada; más de
 //    ~6,5 cm = abierta (dos umbrales para que no parpadee).
+//  · La palma "de canto" (vertical) junto a un objeto lo resalta;
+//    al cerrar el puño se agarra.
 //  · Empujar botones: la punta del índice (poke).
 //  · Respaldo con controles del Quest: el gatillo lateral (squeeze)
 //    cierra la "mano" y la punta del control hace de índice.
@@ -26,6 +28,10 @@ export class Mano {
   /** Punta del índice (o punta del control). */
   readonly indice = new Vector3();
   readonly giro = new Quaternion();
+  /** Hacia dónde mira la palma (sale de ella). */
+  readonly normal = new Vector3(0, -1, 0);
+  /** Dónde va lo que se lleva: centro de la palma, un poco hacia los nudillos y afuera. */
+  readonly agarre = new Vector3();
   cerrada = false;
   recienCerrada = false;
   recienAbierta = false;
@@ -99,6 +105,7 @@ export class Manos {
     const muneca = pose('wrist');
     const base = pose('middle-finger-metacarpal');
     const indice = pose('index-finger-tip');
+    const nudillo = pose('middle-finger-phalanx-proximal');
     if (!muneca || !base || !indice) {
       return false;
     }
@@ -126,6 +133,15 @@ export class Manos {
     mano.indice.set(ip.x, ip.y, ip.z);
     const o = muneca.transform.orientation;
     mano.giro.set(o.x, o.y, o.z, o.w);
+    // En las articulaciones de WebXR el eje -Y sale de la palma.
+    mano.normal.set(0, -1, 0).applyQuaternion(mano.giro);
+    const np = nudillo?.transform.position ?? bp;
+    mano.agarre
+      .set(np.x, np.y, np.z)
+      .sub(this.p)
+      .multiplyScalar(0.55)
+      .add(this.p)
+      .addScaledVector(mano.normal, 0.035);
     mano.fijarCerrada(mano.cerrada ? promedio < ABRE : promedio < CIERRA);
     return true;
   }
@@ -144,6 +160,8 @@ export class Manos {
     mano.presente = true;
     mano.palma.set(t.position.x, t.position.y, t.position.z);
     mano.giro.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
+    mano.normal.set(0, 0, -1).applyQuaternion(mano.giro);
+    mano.agarre.copy(mano.palma);
     // La "punta del índice" es la punta del control (6 cm hacia adelante).
     mano.indice.set(0, -0.01, -0.06).applyQuaternion(mano.giro).add(mano.palma);
     // Gatillo lateral (botón 1 del perfil xr-standard) = cerrar la mano.

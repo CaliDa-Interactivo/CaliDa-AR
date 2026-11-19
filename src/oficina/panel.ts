@@ -11,7 +11,7 @@
 import { Group } from '@iwsdk/core';
 import { CATEGORIAS, COLOR, MUNICIPIOS, type IdCategoria } from './datos.js';
 import type { Aviso, Pedido } from './modelo.js';
-import { Boton3D, FUENTE, Lienzo, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
+import { BOTON, Boton3D, FUENTE, Lienzo, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
 
 const PX_ANCHO = 1100;
 const PX_ALTO = 850;
@@ -65,6 +65,7 @@ export class Panel {
     // Botón de acción de cada tarjeta (a la derecha de la tarjeta).
     for (let i = 0; i < TARJETAS; i++) {
       const b = new Boton3D('Aceptar', 0.105, 0.042);
+      b.activo = false; // se prende al pintar una tarjeta con acción
       this.colocar(b, 945, Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2);
       b.alPresionar = () => {
         const aviso = this.visibles[i];
@@ -76,21 +77,21 @@ export class Panel {
     }
     // Lista de municipios: 3 columnas × 6 filas.
     MUNICIPIOS.forEach((nombre, i) => {
-      const b = new Boton3D(nombre, 0.128, 0.038, COLOR.petroleo);
+      const b = new Boton3D(nombre, 0.128, 0.038, BOTON.secundario);
       const col = i % 3;
       const fila = Math.floor(i / 3);
       this.colocar(b, 200 + col * 350, 205 + fila * 100);
       b.alPresionar = () => this.alMunicipio(nombre);
       this.botonesMunicipio.push(b);
     });
-    this.volver = new Boton3D('Volver', 0.1, 0.036, COLOR.gris, COLOR.azul);
+    this.volver = new Boton3D('Volver', 0.1, 0.036, BOTON.secundario);
     this.colocar(this.volver, 960, 800);
     this.volver.alPresionar = () => this.verAvisos();
     // Debajo del panel: mover la oficina y saltar el tutorial.
-    this.mover = new Boton3D('Mover oficina', 0.13, 0.036, COLOR.petroleo);
+    this.mover = new Boton3D('Mover oficina', 0.13, 0.036, BOTON.secundario);
     this.mover.grupo.position.set(-0.12, -ANCHO_PANEL * (PX_ALTO / PX_ANCHO) / 2 - 0.035, 0);
     this.grupo.add(this.mover.grupo);
-    this.saltar = new Boton3D('Saltar tutorial', 0.15, 0.036, COLOR.gris, COLOR.azul);
+    this.saltar = new Boton3D('Saltar tutorial', 0.15, 0.036, BOTON.secundario);
     this.saltar.grupo.position.set(0.11, -ANCHO_PANEL * (PX_ALTO / PX_ANCHO) / 2 - 0.035, 0);
     this.grupo.add(this.saltar.grupo);
     this.verAvisos();

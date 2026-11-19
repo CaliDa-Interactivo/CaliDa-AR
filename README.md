@@ -25,11 +25,25 @@ alrededor: izquierda, el panel de avisos; frente, la repisa de 6 categorías (to
 la pila de cajas, la zona de trabajo, la caja del pedido y la caneca de descarte; derecha, el camión
 y el botón "Despachar".
 
-- **Manos sin pellizco:** se agarra cerrando la mano (puño) y los botones se empujan con la punta
-  del índice. Los rayos y el pellizco de IWSDK se apagan. Con controles: gatillo lateral para
-  agarrar. En el computador (`?prueba`): arrastrar y hacer clic con el mouse.
-- **Flujo:** llegan cajas → abrir con la tapa → revisar cada objeto (contorno rojo = dañado) →
-  a su fila o a la caneca → llega un pedido con reloj → elegir el municipio del Valle del Cauca →
+- **Estética de la página:** la estantería es `estanteria.glb` de la página con sus placas (borde
+  de madera, crema, clavos, Roboto 700, contador `n/30` y punto de estado); los productos son los
+  modelos de la página simplificados (`public/models/ra/`); los botones son píldoras 3D con los
+  colores del administrador (principal azul #1F5490, secundario crema, peligro rojo).
+- **Espacio:** la mesa flota a la cintura (~58 % de la altura de los ojos sobre el piso). El piso se
+  busca con los planos del visor y, si no hay, con hit-test (`SondaPiso` en `webxr.ts`); si nada
+  responde se usa el piso del espacio de referencia. Mientras se escoge el lugar, el gato y
+  "Colocar aquí" siguen la mirada. Al colocarla se fija con un ancla de WebXR.
+- **Manos sin pellizco:** la palma de canto (vertical) junto a un objeto lo resalta y al cerrar el
+  puño se agarra (cierra < 4,5 cm, abre > 6,5 cm). Lo que se lleva va en la palma, un poco afuera
+  de los nudillos, con el giro con que se tomó, sigue la muñeca suavizado (~50 ms), se achica si es
+  grande y siempre se ve encima de la mano. Sonidos: "pop" al agarrar, acierto o error al soltar en
+  un puesto. Botones con la punta del índice. Rayos y pellizco de IWSDK apagados. Con controles:
+  gatillo lateral. En el computador (`?prueba`): arrastrar y hacer clic con el mouse.
+- **Oclusión:** con Depth Sensing (Quest 3) lo real tapa lo virtual con borde suave
+  (`DepthSensingSystem` + `oclusion.ts`, que también parcha los objetos que aparecen después); sin
+  él, la malla de la mano se vuelve un oclusor invisible. La mano dibujada no se ve.
+- **Flujo:** llegan cajas → abrir con la tapa → revisar cada objeto a mano (contorno rojo = dañado;
+  el gato lo explica, ya no hay pregunta Sí / No) → a su fila o a la caneca → llega un pedido con reloj → elegir el municipio del Valle del Cauca →
   armar la caja desde la repisa → al camión → botón. Resumen diario con estrellas y resumen de la semana.
 - **Código:** `src/oficina/` (`juego.ts` es el sistema; `escena.ts`, `repisa.ts`, `panel.ts`,
   `interaccion.ts`, `manos.ts`, `objetos.ts`, `datos.ts` con las jornadas y municipios).
@@ -39,9 +53,12 @@ y el botón "Despachar".
   repisa compartida, el estado de las categorías, el chat y los resúmenes.
   - **Receptor:** donantes en fila con barra de paciencia y tarjeta (nombres y cédulas inventados);
     se digita nombre, cédula, categoría y cantidad en el teclado virtual y se registra; si la fila
-    está llena se rechaza. Abre cajas y surte la repisa. A la derecha, el panel de estado.
-  - **Despachador:** pedidos con reloj en su computador, caja vacía infinita, camión y botón.
-  - **Chat** sobre el computador de los dos: mensajes rápidos y texto con el teclado virtual.
+    está llena se rechaza. Abre cajas, clasifica a mano y surte la repisa. A la derecha, el panel de estado.
+  - **Despachador:** pedidos con reloj en su computador, caja vacía infinita, camión y botón. Sin
+    caneca (no clasifica) y sin teclado.
+  - **Mensajes** sobre el computador de los dos, solo con botones (sin texto libre): uno por
+    categoría con la foto de su producto ("Necesito …" el despachador, "Llegó …" el receptor) y uno
+    general ("¡Gracias!" / "¿Qué necesitas?").
   - Archivos: `red.ts` (PeerJS), `compartido.ts` (estado y reglas, sin three.js), `multi.ts`
     (sistema), `multi-ui.ts` (teclado, chat, formulario, panel de estado, donantes).
   - Prueba en el computador: `?prueba&multi=crear&rol=despachador` en una pestaña (el código

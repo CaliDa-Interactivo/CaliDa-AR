@@ -40,7 +40,7 @@ import { OficinaSystem, cuentaNueva, type Cuenta } from './juego.js';
 import {
   Chat,
   Donante,
-  ESTILO_ESTADO,
+  PUNTO_ESTADO,
   Formulario,
   NOMBRES,
   PanelEstado,
@@ -50,6 +50,7 @@ import {
   type MensajeChat,
 } from './multi-ui.js';
 import type { Mensaje, Red, Rol } from './red.js';
+import { miniatura } from './miniaturas.js';
 import { aplicarOp, estadoInicial, sumar, vistaRepisa, type Compartido, type Op } from './compartido.js';
 
 /** Azar con semilla: cada día sale igual en los dos dispositivos. */
@@ -107,28 +108,10 @@ export class MultiSystem extends OficinaSystem {
     const e = this.escena;
     this.tutorial = false;
     e.panel.saltar.activo = false;
-    // Chat encima del computador de la izquierda y teclado en la mesa.
-    this.chat = new Chat(this.rol, 0.4);
-    this.chat.alEnviar = (texto) => this.op({ tipo: 'chat', de: this.rol, texto });
-    this.teclado.grupo.position.set(-0.66, 0.012, -0.13);
-    mirarAlCentro(this.teclado.grupo);
-    this.teclado.grupo.rotation.x = -1.15;
-    e.sobre.add(this.teclado.grupo);
-    this.teclado.alTecla = (letra) => {
-      if (this.chat.escribiendo) {
-        this.chat.borrador = (this.chat.borrador + letra).slice(0, 80);
-      } else {
-        this.formulario?.tecla(letra);
-      }
-    };
-    this.teclado.alBorrar = () => {
-      if (this.chat.escribiendo) {
-        this.chat.borrador = this.chat.borrador.slice(0, -1);
-      } else {
-        this.formulario?.borrar();
-      }
-    };
-    this.inter.botones.push(...this.teclado.teclas, ...this.chat.botones);
+    // Mensajes encima del computador de la izquierda: solo con botones.
+    this.chat = new Chat(this.rol, 0.4, (cat) => miniatura(this.world.renderer, cat));
+    this.chat.alEnviar = (texto, cat) => this.op({ tipo: 'chat', de: this.rol, texto, ...(cat ? { cat } : {}) });
+    this.inter.botones.push(...this.chat.botones);
 
     if (this.rol === 'receptor') {
       // Izquierda: el formulario de registro en lugar del panel de avisos.
@@ -138,7 +121,15 @@ export class MultiSystem extends OficinaSystem {
       this.formulario.grupo.rotation.copy(e.panel.grupo.rotation);
       e.sobre.add(this.formulario.grupo);
       this.formulario.grupo.add(this.chat.grupo);
-      this.chat.grupo.position.set(0, 0.4, 0);
+      this.chat.grupo.position.set(0, 0.47, 0);
+      // El teclado solo sirve para el formulario (nombre, cédula, cantidad).
+      this.teclado.grupo.position.set(-0.66, 0.012, -0.13);
+      mirarAlCentro(this.teclado.grupo);
+      this.teclado.grupo.rotation.x = -1.15;
+      e.sobre.add(this.teclado.grupo);
+      this.teclado.alTecla = (letra) => this.formulario?.tecla(letra);
+      this.teclado.alBorrar = () => this.formulario?.borrar();
+      this.inter.botones.push(...this.teclado.teclas);
       this.formulario.registrar.alPresionar = () => this.registrar();
       this.formulario.rechazar.alPresionar = () => this.rechazarDonante();
       this.inter.botones.push(...this.formulario.botones);
@@ -159,8 +150,11 @@ export class MultiSystem extends OficinaSystem {
     } else {
       // Despachador: chat encima del computador de necesidades.
       e.panel.grupo.add(this.chat.grupo);
-      this.chat.grupo.position.set(0, 0.4, 0);
+      this.chat.grupo.position.set(0, 0.47, 0);
       this.cajaInfinita = true;
+      // Sin caneca: el despachador no clasifica donaciones.
+      this.conCaneca = false;
+      e.caneca.visible = false;
     }
   }
 
@@ -271,7 +265,7 @@ export class MultiSystem extends OficinaSystem {
     this.gato.decir(
       this.rol === 'receptor'
         ? `${DIAS[this.dia]}: llegan donantes a la fila. Registra cada uno antes de que se le acabe la paciencia.`
-        : `${DIAS[this.dia]}: revisa los pedidos en tu computador. Si falta algo en la repisa, pídeselo al receptor por chat.`,
+        : `${DIAS[this.dia]}: revisa los pedidos en tu computador. Si falta algo en la estantería, pídeselo al receptor con los botones de mensajes.`,
       DIAS[this.dia],
     );
   }
@@ -313,7 +307,7 @@ export class MultiSystem extends OficinaSystem {
     // La repisa y los estados siempre como manda el compartido.
     const v = this.repisaVista();
     this.escena.repisa.fijarExacto(v.cantidades, v.danados);
-    this.escena.repisa.fijarEstados(c.estados.map((e) => ({ texto: ESTILO_ESTADO[e].texto, color: ESTILO_ESTADO[e].color })));
+    this.escena.repisa.fijarEstados(c.estados.map((e) => PUNTO_ESTADO[e]));
     // Mensaje nuevo del compañero: suena.
     const ultimo = c.chat[c.chat.length - 1];
     if (ultimo && ultimo.id > this.ultimoChat) {
@@ -368,7 +362,6 @@ export class MultiSystem extends OficinaSystem {
     this.fase = 'resumen';
     this.resumenPintado = -1;
     sonidos.fin();
-    this.escena.pregunta.visible = false;
     this.escena.resumen.visible = true;
     this.escena.siguiente.escribir(this.dia < JORNADAS.length - 1 ? 'Siguiente jornada' : 'Resumen de la semana');
     const l = this.escena.lienzoResumen;
@@ -614,8 +607,8 @@ export class MultiSystem extends OficinaSystem {
     this.cuenta.rechazadas++;
     if (this.filaLlena(i)) {
       sonidos.clic();
-      this.op({ tipo: 'chat', de: this.rol, texto: `No pudimos recibir ${CATEGORIAS[i].corto.toLowerCase()}: la fila está llena.` });
-      this.gato.decir('Bien: esa fila estaba llena. Le avisé al despachador por el chat.');
+      this.op({ tipo: 'chat', de: this.rol, texto: `Fila llena: no pudimos recibir ${CATEGORIAS[i].corto.toLowerCase()}`, cat: CATEGORIAS[i].id });
+      this.gato.decir('Bien: esa fila estaba llena. Le avisé al despachador con un mensaje.');
     } else {
       this.cuenta.errores++;
       sonidos.error();
@@ -642,7 +635,7 @@ export class MultiSystem extends OficinaSystem {
     this.tPintarMulti -= dt;
     if (this.tPintarMulti <= 0) {
       this.tPintarMulti = 0.2;
-      this.chat.pintar(this.comp.chat, this.red.conectado, this.tiempo);
+      this.chat.pintar(this.comp.chat, this.red.conectado);
       this.formulario?.pintar(this.fila.length > 0, this.tiempo);
       this.panelEstado?.pintar(this.comp.estados);
     }

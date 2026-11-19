@@ -9,8 +9,9 @@
 //   · Derecha: el camión de la Cruz Roja y el botón de despacho.
 //
 // Todo lo que va sobre las mesas cuelga de `sobre`, cuyo y = 0 es
-// la superficie de las mesas; la altura real (cintura) se ajusta
-// al colocar la oficina. Todo queda al alcance del brazo.
+// la superficie de las mesas. Las mesas flotan (no tienen patas ni
+// dependen de una mesa real): su altura (la cintura) se ajusta al
+// colocar la oficina. Todo queda al alcance del brazo.
 // ============================================================
 import {
   BoxGeometry,
@@ -27,13 +28,13 @@ import { PLATAFORMA, crearCamion, sombra } from '../modelos.js';
 import { COLOR } from './datos.js';
 import { Panel } from './panel.js';
 import { ALTO_REPISA, Repisa } from './repisa.js';
-import { Boton3D, Lienzo } from './ui.js';
+import { BOTON, Boton3D, Lienzo } from './ui.js';
 
 const mate = (color: string) => new MeshStandardMaterial({ color, roughness: 0.88 });
 
 /** Rectángulos de las mesas (x0, x1, z0, z1) sobre el plano. */
 const MESAS: [number, number, number, number][] = [
-  [-0.55, 0.55, -0.75, -0.25], // frente
+  [-0.55, 0.55, -0.88, -0.25], // frente (más honda: lleva la estantería)
   [-0.9, -0.55, -0.75, -0.05], // izquierda
   [0.55, 0.9, -0.75, -0.05], // derecha
 ];
@@ -57,41 +58,36 @@ export class Escena {
   readonly raiz = new Group();
   /** y = 0: superficie de las mesas. */
   readonly sobre = new Group();
-  private patas = new Group();
   readonly repisa = new Repisa();
   readonly panel = new Panel();
   readonly camion: Group;
   readonly pedestal: Mesh;
-  readonly botonDespacho = new Boton3D('Despachar', 0.13, 0.07, COLOR.rojo);
+  readonly botonDespacho = new Boton3D('Despachar', 0.14, 0.06, BOTON.principal);
   readonly letreroDespacho = new Lienzo(640, 140, 0.2);
   readonly reloj = new Lienzo(900, 150, 0.42);
   readonly letreroPedido = new Lienzo(900, 170, 0.32);
   readonly caneca = new Group();
-  /** Pregunta "¿Está en buen estado?" con Sí / No. */
-  readonly pregunta = new Group();
-  readonly si = new Boton3D('Sí ✓', 0.09, 0.045, COLOR.verde, '#FFFFFF');
-  readonly no = new Boton3D('No ✕', 0.09, 0.045, COLOR.rojo, '#FFFFFF');
   /** Resumen del día / de la semana. */
   readonly resumen = new Group();
   readonly lienzoResumen = new Lienzo(1200, 860, 0.62);
-  readonly siguiente = new Boton3D('Siguiente jornada', 0.2, 0.05, COLOR.rojo);
+  readonly siguiente = new Boton3D('Siguiente jornada', 0.2, 0.05, BOTON.principal);
   /** Flecha del tutorial. */
   readonly flecha: Mesh;
   alto = 0.9;
 
   constructor() {
-    this.raiz.add(this.sobre, this.patas);
+    this.raiz.add(this.sobre);
     this.armarMesas();
 
-    // Repisa al fondo de la mesa del frente.
-    this.repisa.grupo.position.set(0, 0, -0.68);
+    // Estantería de la página al fondo de la mesa del frente.
+    this.repisa.grupo.position.set(0, 0, -0.76);
     this.sobre.add(this.repisa.grupo);
     const sombraRepisa = sombra(1.1, 0.25, 0.25);
-    sombraRepisa.position.set(0, 0.002, -0.68);
+    sombraRepisa.position.set(0, 0.002, -0.76);
     this.sobre.add(sombraRepisa);
 
     // Reloj del día, encima de la repisa.
-    this.reloj.malla.position.set(0, ALTO_REPISA + 0.08, -0.69);
+    this.reloj.malla.position.set(0, ALTO_REPISA + 0.08, -0.8);
     this.sobre.add(this.reloj.malla);
 
     // Caneca de descarte (abierta) sobre la mesa.
@@ -144,28 +140,6 @@ export class Escena {
     mirarAlCentro(this.letreroDespacho.malla);
     this.sobre.add(this.letreroDespacho.malla);
 
-    // Pregunta sobre la zona de trabajo.
-    const lienzoPregunta = new Lienzo(700, 150, 0.24);
-    lienzoPregunta.ctx.fillStyle = COLOR.crema;
-    lienzoPregunta.ctx.beginPath();
-    lienzoPregunta.ctx.roundRect(4, 4, 692, 142, 50);
-    lienzoPregunta.ctx.fill();
-    lienzoPregunta.ctx.fillStyle = COLOR.azul;
-    lienzoPregunta.ctx.font = '900 60px Roboto, Arial, sans-serif';
-    lienzoPregunta.ctx.textAlign = 'center';
-    lienzoPregunta.ctx.textBaseline = 'middle';
-    lienzoPregunta.ctx.fillText('¿Está en buen estado?', 350, 78);
-    lienzoPregunta.listo();
-    this.pregunta.add(lienzoPregunta.malla);
-    this.si.grupo.position.set(-0.06, -0.06, 0);
-    this.no.grupo.position.set(0.06, -0.06, 0);
-    this.pregunta.add(this.si.grupo, this.no.grupo);
-    this.pregunta.position.set(TRABAJO.x, 0.36, TRABAJO.z + 0.06);
-    mirarAlCentro(this.pregunta);
-    this.pregunta.rotation.x = -0.25;
-    this.pregunta.visible = false;
-    this.sobre.add(this.pregunta);
-
     // Resumen (día o semana), al frente.
     this.resumen.add(this.lienzoResumen.malla);
     this.siguiente.grupo.position.set(0, -0.19, 0.004);
@@ -183,34 +157,24 @@ export class Escena {
   }
 
   get botones(): Boton3D[] {
-    return [...this.panel.todosLosBotones, this.botonDespacho, this.si, this.no, this.siguiente];
+    return [...this.panel.todosLosBotones, this.botonDespacho, this.siguiente];
   }
 
+  /** Tableros flotantes con la madera de la estantería de la página. */
   private armarMesas(): void {
-    const tablero = mate(COLOR.maderaClara);
-    const pata = mate(COLOR.madera);
+    const tablero = new MeshStandardMaterial({ color: '#C98F62', emissive: '#3A1F0E', roughness: 0.9 });
+    const canto = new MeshStandardMaterial({ color: '#B87048', emissive: '#4E2A14', roughness: 0.9 });
     for (const [x0, x1, z0, z1] of MESAS) {
-      const t = new Mesh(new BoxGeometry(x1 - x0, 0.03, z1 - z0), tablero);
+      const t = new Mesh(new BoxGeometry(x1 - x0, 0.03, z1 - z0), [canto, canto, tablero, canto, canto, canto]);
       t.position.set((x0 + x1) / 2, -0.015, (z0 + z1) / 2);
       this.sobre.add(t);
-      for (const [x, z] of [
-        [x0 + 0.04, z0 + 0.04],
-        [x1 - 0.04, z0 + 0.04],
-        [x0 + 0.04, z1 - 0.04],
-        [x1 - 0.04, z1 - 0.04],
-      ]) {
-        const p = new Mesh(new BoxGeometry(0.035, 1, 0.035), pata);
-        p.position.set(x, 0.5, z);
-        this.patas.add(p);
-      }
     }
   }
 
-  /** Ajusta la altura de las mesas (a la cintura del jugador). */
+  /** Altura de las mesas sobre el piso (a la cintura del jugador). */
   ajustarAltura(alto: number): void {
     this.alto = alto;
     this.sobre.position.y = alto;
-    this.patas.scale.y = alto - 0.03;
   }
 
   /** Altura de apoyo en (x, z) de `sobre`: la mesa (0) o el piso. */

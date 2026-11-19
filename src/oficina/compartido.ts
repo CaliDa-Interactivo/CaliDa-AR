@@ -5,7 +5,7 @@
 //   · El invitado ve la repisa como la manda el anfitrión más sus
 //     cambios aún sin confirmar (vistaRepisa()).
 // ============================================================
-import { CATEGORIAS, INVENTARIO_INICIAL, JORNADAS, TOPE } from './datos.js';
+import { CATEGORIAS, INVENTARIO_INICIAL, JORNADAS, TOPE, type IdCategoria } from './datos.js';
 import { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
 import type { EstadoCat, MensajeChat } from './multi-ui.js';
 import type { Rol } from './red.js';
@@ -28,7 +28,7 @@ export interface Compartido {
 export type Op =
   | { tipo: 'repisa'; seq: number; i: number; d: 1 | -1; danado: boolean }
   | { tipo: 'estado'; i: number; valor: EstadoCat }
-  | { tipo: 'chat'; de: Rol; texto: string }
+  | { tipo: 'chat'; de: Rol; texto: string; cat?: IdCategoria }
   | { tipo: 'listo' }
   | { tipo: 'cuenta'; dia: number; cuenta: Cuenta }
   | { tipo: 'siguiente' };
@@ -81,7 +81,7 @@ export function aplicarOp(c: Compartido, o: Op, mia: boolean): { comp: Compartid
   } else if (o.tipo === 'estado') {
     c.estados[o.i] = o.valor;
   } else if (o.tipo === 'chat') {
-    c.chat.push({ id: (c.chat[c.chat.length - 1]?.id ?? 0) + 1, de: o.de, texto: o.texto });
+    c.chat.push({ id: (c.chat[c.chat.length - 1]?.id ?? 0) + 1, de: o.de, texto: o.texto, ...(o.cat ? { cat: o.cat } : {}) });
     c.chat = c.chat.slice(-30);
   } else if (o.tipo === 'listo') {
     c.listos[mia ? 'anfitrion' : 'invitado'] = true;

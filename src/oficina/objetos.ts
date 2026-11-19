@@ -8,8 +8,11 @@
 // agujero, empaque arrugado), contorno rojo y una etiqueta.
 // ============================================================
 import {
+  AssetManager,
   BackSide,
+  Box3,
   BoxGeometry,
+  Color,
   BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
@@ -42,6 +45,57 @@ const m4 = (x: number, y: number, z: number, rz = 0, rx = 0): Matrix4 =>
   );
 
 let cache: Record<IdCategoria, Parte[]> | null = null;
+
+/** Modelos de la página (los mismos de su estantería) para cada categoría. */
+const MODELO_PAGINA: Partial<Record<IdCategoria, string>> = {
+  alimentos: 'ra_lata',
+  agua: 'ra_agua',
+  ropa: 'ra_camisa',
+  higiene: 'ra_papel',
+};
+
+/** Colores que la página corrige en sus modelos (js/ajustes-modelos.js). */
+const AJUSTES: Record<string, string> = {
+  'Bottle plastic': '#8FD0F2',
+  'Bottle cap': '#1E6FD9',
+};
+
+/**
+ * Partes de un modelo .glb de la página: cada malla con su material mate,
+ * escalada a una caja de ancho × alto y apoyada en y = 0.
+ */
+function partesDeModelo(id: string, ancho: number, alto: number): Parte[] | null {
+  const gltf = AssetManager.getGLTF(id);
+  if (!gltf) {
+    return null;
+  }
+  const raiz = gltf.scene;
+  raiz.updateMatrixWorld(true);
+  const caja = new Box3().setFromObject(raiz, true);
+  const tam = caja.getSize(new Vector3());
+  const escala = Math.min(ancho / tam.x, alto / tam.y, ancho / tam.z);
+  const centro = caja.getCenter(new Vector3());
+  // Mueve el modelo a su lugar: centrado en x/z, base en y = 0.
+  const ajuste = new Matrix4()
+    .makeScale(escala, escala, escala)
+    .multiply(new Matrix4().makeTranslation(-centro.x, -caja.min.y, -centro.z));
+  const partes: Parte[] = [];
+  raiz.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh) {
+      return;
+    }
+    const geometria = m.geometry.clone().applyMatrix4(new Matrix4().multiplyMatrices(ajuste, m.matrixWorld));
+    const original = m.material as MeshStandardMaterial;
+    const material = mate(AJUSTES[original.name] ?? `#${(original.color ?? new Color('#cccccc')).getHexString()}`);
+    material.name = original.name;
+    if (original.map) {
+      material.map = original.map;
+    }
+    partes.push({ geometria, material, matriz: new Matrix4() });
+  });
+  return partes;
+}
 
 /** Partes de un objeto de cada categoría (base en y = 0, unos 5-6 cm). */
 export function partesDe(cat: IdCategoria): Parte[] {
@@ -78,6 +132,19 @@ export function partesDe(cat: IdCategoria): Parte[] {
         { geometria: new SphereGeometry(0.006, 8, 6), material: mate('#F2B84B'), matriz: m4(0, 0.032, 0.017) },
       ],
     };
+    // Las categorías que existen en la página usan su modelo.
+    const medidas: Record<string, [number, number]> = {
+      alimentos: [0.045, 0.055],
+      agua: [0.04, 0.075],
+      ropa: [0.06, 0.04],
+      higiene: [0.045, 0.05],
+    };
+    for (const [c, id] of Object.entries(MODELO_PAGINA) as [IdCategoria, string][]) {
+      const partes = partesDeModelo(id, ...medidas[c]);
+      if (partes?.length) {
+        cache[c] = partes;
+      }
+    }
   }
   return cache[cat];
 }
@@ -96,33 +163,40 @@ function armar(cat: IdCategoria): Group {
 const negro = mate('#3A2A22');
 const hueco = new MeshBasicMaterial({ color: '#2B1A12' });
 
-/** Señal visible del daño, según la categoría. */
+/** Señal visible del daño, según la categoría (ubicada según el tamaño real). */
 function senalDano(cat: IdCategoria, g: Group): void {
+  const caja = new Box3().setFromObject(g, true);
+  const arriba = caja.max.y;
+  const frente = caja.max.z;
   if (cat === 'alimentos') {
-    // Etiqueta de fecha vencida en el costado.
-    const fecha = new Mesh(new BoxGeometry(0.018, 0.01, 0.002), negro);
-    fecha.position.set(0, 0.04, 0.0235);
+    // Etiqueta de fecha vencida en el frente.
+    const fecha = new Mesh(new BoxGeometry(0.02, 0.011, 0.002), negro);
+    fecha.position.set(0, arriba * 0.75, frente + 0.001);
     g.add(fecha);
   } else if (cat === 'agua') {
-    // Sin tapa (abierta) y una gota que se sale.
-    const tapa = g.children[3];
-    tapa.visible = false;
+    // Sin tapa (abierta) y un charquito que se sale.
+    g.traverse((o) => {
+      const m = o as Mesh;
+      if (m.isMesh && (m.material as Material).name === 'Bottle cap') {
+        m.visible = false;
+      }
+    });
     const gota = new Mesh(new SphereGeometry(0.006, 8, 6), mate('#4FA3D9'));
-    gota.position.set(0.02, 0.005, 0.012);
-    gota.scale.set(1.6, 0.4, 1.6);
+    gota.position.set(0.022, 0.003, 0.012);
+    gota.scale.set(1.8, 0.35, 1.8);
     g.add(gota);
   } else if (cat === 'ropa' || cat === 'cobijas') {
-    // Agujero o rasgadura.
+    // Agujero o rasgadura encima.
     const agujero = new Mesh(new CircleGeometry(0.008, 10), hueco);
     agujero.rotation.x = -Math.PI / 2;
-    agujero.position.set(0.012, cat === 'ropa' ? 0.0166 : 0.0425, 0.006);
+    agujero.position.set(0.01, arriba + 0.0008, 0.004);
     agujero.scale.set(1.4, 0.7, 1);
     g.add(agujero);
   } else {
     // Empaque dañado: aplastado y con una arruga oscura.
-    g.children[0].scale.set(1, 0.82, 1);
+    g.scale.set(1, 0.85, 1);
     const arruga = new Mesh(new BoxGeometry(0.05, 0.003, 0.004), negro);
-    arruga.position.set(0, cat === 'panales' ? 0.045 : 0.017, 0.012);
+    arruga.position.set(0, arriba * 0.8, frente + 0.001);
     arruga.rotation.z = 0.35;
     g.add(arruga);
   }
@@ -132,7 +206,7 @@ function senalDano(cat: IdCategoria, g: Group): void {
 
 const MATERIAL_CONTORNO: Record<string, MeshBasicMaterial> = {};
 function materialContorno(color: string): MeshBasicMaterial {
-  MATERIAL_CONTORNO[color] ??= new MeshBasicMaterial({ color, side: BackSide });
+  MATERIAL_CONTORNO[color] ??= new MeshBasicMaterial({ color, side: BackSide, transparent: true });
   return MATERIAL_CONTORNO[color];
 }
 

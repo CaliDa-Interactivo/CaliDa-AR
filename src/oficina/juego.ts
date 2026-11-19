@@ -5,8 +5,8 @@
 //   bienvenida del gato → "Colocar aquí" (se arma la oficina)
 //   → jornada (lunes a viernes, cada día más difícil):
 //       llegan cajas a la pila → tomar una y abrirla →
-//       sacar cada objeto → ¿buen estado? sí: a su fila (si hay
-//       menos de 30) / no: a la caneca → ...
+//       sacar cada objeto → revisarlo a mano: si está bien, a su
+//       fila (si hay menos de 30); si está dañado, a la caneca → ...
 //       llega un pedido con reloj → elegir el municipio → armar la
 //       caja desde la repisa → al camión → botón → ¿a tiempo?
 //   → resumen del día → siguiente jornada … → resumen de la semana.
@@ -22,12 +22,13 @@ import {
   VisibilityState,
   type Entity,
   type Object3D,
+  DepthOccludable,
 } from '@iwsdk/core';
 import { Animador } from '../guion/animador.js';
 import { Gato } from '../guion/gato.js';
 import { sonidos } from '../guion/sonidos.js';
 import { crearCaja, crearTarima, type CajaArmada } from '../modelos.js';
-import { AnclaWebXR } from '../webxr.js';
+import { AnclaWebXR, SondaPiso } from '../webxr.js';
 import {
   CATEGORIAS,
   COLOR,
@@ -52,13 +53,14 @@ import {
   mirarAlCentro,
 } from './escena.js';
 import { Interaccion, type Agarrable, type Destino } from './interaccion.js';
+import { Oclusion } from './oclusion.js';
 import { Manos } from './manos.js';
 import { completo, cuentaNueva, estrellasDe, faltantes, type Aviso, type Cuenta, type Pedido } from './modelo.js';
 export { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
 import { Objeto } from './objetos.js';
 import { reloj, textoPedido } from './panel.js';
 import { ESCALA_REPISA } from './repisa.js';
-import { Boton3D, FUENTE, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
+import { BOTON, Boton3D, FUENTE, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
 
 export type Fase = 'inicio' | 'colocar' | 'espera' | 'jornada' | 'resumen' | 'semana';
 
@@ -88,8 +90,13 @@ export class OficinaSystem extends createSystem({}) {
   protected inter!: Interaccion;
   protected gato!: Gato;
   protected ancla = new AnclaWebXR();
+  protected sonda = new SondaPiso();
+  /** El despachador no tiene caneca: no clasifica, solo despacha. */
+  protected conCaneca = true;
+  protected oclusion!: Oclusion;
+  private girando = false;
   protected inicio = new Group();
-  protected colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.06, COLOR.rojo);
+  protected colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.055, BOTON.principal);
 
   protected fase: Fase = 'inicio';
   protected tiempo = 0;
@@ -138,6 +145,12 @@ export class OficinaSystem extends createSystem({}) {
   init(): void {
     const mundo = this.world;
     this.raizEnt = mundo.createTransformEntity(this.escena.raiz);
+    try {
+      this.raizEnt.addComponent(DepthOccludable);
+    } catch {
+      // Sin el sistema de profundidad registrado: queda la mano como oclusor.
+    }
+    this.oclusion = new Oclusion(mundo, this.escena.raiz, this.raizEnt);
     // Sin rayos ni pellizco de IWSDK: todo con puño e índice.
     for (const lado of ['left', 'right'] as const) {
       const mp = this.input.xr.multiPointers[lado];
@@ -227,30 +240,72 @@ export class OficinaSystem extends createSystem({}) {
     );
   }
 
+  /** y del piso real (planos o hit-test) o el del espacio de referencia. */
+  protected pisoY(): number {
+    return this.sonda.piso ?? 0;
+  }
+
   /** Pone el botón y el gato frente a la persona. */
   protected mostrarInicio(): void {
     this.leerCabeza();
     const raiz = this.escena.raiz;
-    raiz.position.set(this.cabeza.x, 0, this.cabeza.z);
+    raiz.position.set(this.cabeza.x, this.pisoY(), this.cabeza.z);
     raiz.rotation.set(0, Math.atan2(-this.frente.x, -this.frente.z), 0);
     raiz.updateWorldMatrix(true, true);
     this.inicio.visible = true;
-    this.inicio.position.set(0.06, this.cabeza.y - 0.32, -0.45);
     this.colocarBoton.activo = true;
     const gato = this.gato.objeto;
     gato.visible = true;
     gato.scale.setScalar(1);
-    gato.position.set(this.inicio.position.x - 0.2, this.inicio.position.y - 0.33, -0.47);
+    this.alturaInicio();
     this.gato.animar('saludar');
+  }
+
+  private alturaInicio(): void {
+    this.inicio.position.set(0.06, this.cabeza.y - this.escena.raiz.position.y - 0.32, -0.45);
+    this.gato.objeto.position.set(this.inicio.position.x - 0.2, this.inicio.position.y - 0.33, -0.47);
+  }
+
+  /**
+   * Mientras se escoge el lugar, el gato y "Colocar aquí" siguen la mirada:
+   * siempre quedan enfrente. Giran solo cuando la mirada se aleja (así el
+   * botón no se escapa del dedo) y nunca mientras se está empujando.
+   */
+  private seguirMirada(dt: number): void {
+    if (this.colocarBoton.hundido > 0) {
+      return;
+    }
+    const raiz = this.escena.raiz;
+    const k = 1 - Math.exp(-dt * 4);
+    raiz.position.x += (this.cabeza.x - raiz.position.x) * k;
+    raiz.position.z += (this.cabeza.z - raiz.position.z) * k;
+    raiz.position.y += (this.pisoY() - raiz.position.y) * k;
+    let d = Math.atan2(-this.frente.x, -this.frente.z) - raiz.rotation.y;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    if (Math.abs(d) > 0.3) {
+      this.girando = true;
+    }
+    if (this.girando) {
+      raiz.rotation.y += d * Math.min(1, dt * 5);
+      if (Math.abs(d) < 0.04) {
+        this.girando = false;
+      }
+    }
+    this.alturaInicio();
+    if (this.sonda.fuente && !this.vistas.has('piso')) {
+      this.vistas.add('piso');
+      this.gato.decir('Ya encontré el piso. Mira hacia donde quieras la oficina y empuja "Colocar aquí".');
+    }
   }
 
   /** Arma la oficina donde está la persona, mirando hacia donde mira. */
   protected colocar(): void {
     this.leerCabeza();
     const raiz = this.escena.raiz;
-    raiz.position.set(this.cabeza.x, 0, this.cabeza.z);
+    raiz.position.set(this.cabeza.x, this.pisoY(), this.cabeza.z);
     raiz.rotation.set(0, Math.atan2(-this.frente.x, -this.frente.z), 0);
-    const alto = Math.min(1.0, Math.max(0.7, this.cabeza.y * 0.58));
+    // Mesa flotante a la cintura: ~58 % de la altura de los ojos sobre el piso.
+    const alto = Math.min(1.0, Math.max(0.7, (this.cabeza.y - raiz.position.y) * 0.58));
     this.escena.ajustarAltura(alto);
     raiz.updateWorldMatrix(true, true);
     // Ancla de WebXR: la oficina queda fija al cuarto real.
@@ -321,7 +376,6 @@ export class OficinaSystem extends createSystem({}) {
     this.escena.camion.scale.setScalar(0.75);
     this.escena.panel.verAvisos();
     this.escena.resumen.visible = false;
-    this.escena.pregunta.visible = false;
     this.escena.flecha.visible = false;
   }
 
@@ -613,6 +667,7 @@ export class OficinaSystem extends createSystem({}) {
     // La caja abierta: cada vez que se cierra la mano adentro sale un objeto.
     const abierta: Agarrable = {
       obj: new Group(),
+      palmaLibre: true,
       activo: () => this.fase === 'jornada' && this.trabajo?.estado === 'abierta' && this.trabajo.objetos.length > 0,
       tomar: (mano) => {
         const caja = this.trabajo!;
@@ -621,11 +676,7 @@ export class OficinaSystem extends createSystem({}) {
         const oj = this.nuevoObjeto(dato.cat, dato.danado, 'caja');
         oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.palma)));
         this.actual = oj;
-        this.pista(
-          'clasificar',
-          '¿Está en buen estado? Empuja Sí o No, o llévalo tú: a su fila de la repisa o a la caneca de descarte.',
-          new Vector3(TRABAJO.x, 0.32, TRABAJO.z),
-        );
+        this.explicarManual();
         if (dato.danado) {
           this.pista('danado', 'Ese tiene contorno rojo: está dañado. No se entrega: va a la caneca de descarte.', CANECA);
         }
@@ -704,7 +755,7 @@ export class OficinaSystem extends createSystem({}) {
     const p = oj.o.grupo.position;
     let marca = -1;
     let resultado: Destino = null;
-    if (dxz(p, CANECA) < 0.1 && p.y < 0.28) {
+    if (this.conCaneca && dxz(p, CANECA) < 0.1 && p.y < 0.28) {
       resultado = 'valido';
     } else if (this.sobreCajaPedido(p)) {
       const ped = this.enCurso();
@@ -743,7 +794,7 @@ export class OficinaSystem extends createSystem({}) {
       this.zonaMarcada = -1;
     }
     const p = oj.o.grupo.position;
-    if (dxz(p, CANECA) < 0.1 && p.y < 0.28) {
+    if (this.conCaneca && dxz(p, CANECA) < 0.1 && p.y < 0.28) {
       this.aCaneca(oj);
       return;
     }
@@ -829,7 +880,7 @@ export class OficinaSystem extends createSystem({}) {
         this.cuenta.puntos += 5;
       }
     }
-    sonidos.clic();
+    sonidos.acierto();
     this.alPuesto(oj, i, () => this.repisaAgregar(i, oj.o.danado));
   }
 
@@ -838,7 +889,7 @@ export class OficinaSystem extends createSystem({}) {
     this.quitarAgarrable(oj.ag);
     if (oj.o.danado) {
       this.cuenta.puntos += 5;
-      sonidos.clic();
+      sonidos.acierto();
     } else {
       this.cuenta.errores++;
       this.cuenta.puntos -= 10;
@@ -911,7 +962,7 @@ export class OficinaSystem extends createSystem({}) {
     if (oj.o.danado) {
       (p as Pedido & { quejas?: number }).quejas = ((p as Pedido & { quejas?: number }).quejas ?? 0) + 1;
     }
-    sonidos.clic();
+    sonidos.acierto();
     const n = this.minisPedido.length;
     this.v.set(PEDIDO.x, 0.03, PEDIDO.z);
     this.anim.mover(oj.o.grupo, this.v.clone(), 0.25, {
@@ -1104,20 +1155,6 @@ export class OficinaSystem extends createSystem({}) {
       e.flecha.visible = false;
       this.gato.decir('Listo, sin tutorial. ¡Tú puedes!');
     };
-    e.si.alPresionar = () => {
-      const oj = this.actual;
-      if (oj && !oj.o.clasificado) {
-        this.inter.soltarTodo();
-        this.aRepisa(oj);
-      }
-    };
-    e.no.alPresionar = () => {
-      const oj = this.actual;
-      if (oj && !oj.o.clasificado) {
-        this.inter.soltarTodo();
-        this.aCaneca(oj);
-      }
-    };
     e.botonDespacho.alPresionar = () => this.despachar();
     e.botonDespacho.alBloqueado = () => {
       const motivo = this.bloqueoDespacho();
@@ -1194,6 +1231,21 @@ export class OficinaSystem extends createSystem({}) {
     }
   }
 
+  /** La clasificación es a mano: el gato lo explica la primera vez (con o sin tutorial). */
+  protected explicarManual(): void {
+    if (!this.conCaneca || this.vistas.has('manual')) {
+      return;
+    }
+    this.vistas.add('manual');
+    this.gato.decir(
+      'Revísalo tú. Si está en buen estado, llévalo con la mano a su fila de la estantería. Si está dañado (contorno rojo), llévalo a la caneca de descarte.',
+      'Clasifica a mano',
+    );
+    this.flechaEn.set(CANECA.x, 0.05, CANECA.z);
+    this.flechaHasta = this.tiempo + 8;
+    this.escena.flecha.visible = this.tutorial;
+  }
+
   protected puntoPanel(): Vector3 {
     return this.escena.panel.grupo.position.clone().setY(this.escena.panel.grupo.position.y + 0.04);
   }
@@ -1219,7 +1271,6 @@ export class OficinaSystem extends createSystem({}) {
     this.inter.soltarTodo();
     this.fase = 'resumen';
     sonidos.fin();
-    this.escena.pregunta.visible = false;
     this.escena.flecha.visible = false;
     this.pintarResumenDia();
     this.escena.resumen.visible = true;
@@ -1347,10 +1398,16 @@ export class OficinaSystem extends createSystem({}) {
     if (this.ancla.activa && cuadro && espacio) {
       this.ancla.seguir(cuadro, espacio, this.escena.raiz);
     }
+    if ((this.fase === 'inicio' || this.fase === 'colocar') && this.inicio.visible) {
+      this.sonda.actualizar(this.world.xrSession, cuadro, espacio, this.cabeza.y);
+      this.seguirMirada(dt);
+    }
 
     if (this.fase === 'jornada') {
       this.jornada(dt);
     }
+    const manosIWSDK = this.input.xr.visualAdapters.hand;
+    this.oclusion.actualizar(dt, [manosIWSDK.left.visual?.model, manosIWSDK.right.visual?.model]);
     this.inter.actualizar(dt);
     this.anim.actualizar(dt);
     this.gato.actualizar(this.tiempo, this.cabeza);
@@ -1414,8 +1471,6 @@ export class OficinaSystem extends createSystem({}) {
         e.flecha.visible = false;
       }
     }
-    e.pregunta.visible =
-      this.fase === 'jornada' && !!this.actual && !this.actual.o.clasificado && this.actual.origen === 'caja';
     // Etiquetas de los objetos dañados: miran al jugador.
     for (const s of this.sueltos) {
       for (const hijo of s.o.grupo.children) {

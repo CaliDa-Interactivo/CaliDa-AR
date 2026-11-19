@@ -1,6 +1,6 @@
 // CaliDa — experiencia de realidad aumentada para Meta Quest (IWSDK).
 import './guion/fuente-es.js'; // tildes y eñes en los paneles (antes de crear el mundo)
-import { VisibilityState, World } from '@iwsdk/core';
+import { DepthSensingSystem, VisibilityState, World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { ExperienciaSystem } from './experiencia.js';
 import { GuionSystem } from './guion/maquina.js';
@@ -49,6 +49,13 @@ World.create($<HTMLDivElement>('scene-container'), projectOptions).then(async (w
       return;
     }
     registrado = true;
+    if (modo === 'oficina') {
+      // Oclusión con la profundidad real (Quest 3): manos y objetos reales tapan
+      // lo virtual con un borde suave. Si el visor no la da, no hace nada.
+      world.registerSystem(DepthSensingSystem, {
+        configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 20 },
+      });
+    }
     if (modo === 'guion') {
       world.registerSystem(GuionSystem);
     } else if (modo === 'anterior') {

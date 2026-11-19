@@ -1,7 +1,7 @@
 // ============================================================
 // multi-ui.ts — piezas del modo multijugador:
-//   · Teclado virtual 3D (teclas que se empujan con el índice).
-//   · Chat entre receptor y despachador (mensajes rápidos y texto).
+//   · Teclado virtual 3D del formulario del receptor.
+//   · Mensajes entre receptor y despachador (solo botones, sin texto libre).
 //   · Formulario de registro del receptor (nombre, cédula, donación).
 //   · Panel de estado del centro (se necesita / no / urgente).
 //   · Donante en la fila, con su tarjeta y su barra de paciencia.
@@ -18,7 +18,7 @@ import {
 import { crearCaja, sombra } from '../modelos.js';
 import { CATEGORIAS, COLOR, type IdCategoria } from './datos.js';
 import type { Rol } from './red.js';
-import { Boton3D, FUENTE, Lienzo, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
+import { BOTON, Boton3D, FUENTE, Lienzo, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
 
 // ---- Teclado -------------------------------------------------------
 
@@ -38,17 +38,17 @@ export class Teclado {
     this.grupo.add(base);
     FILAS.forEach((fila, f) => {
       [...fila].forEach((letra, k) => {
-        const t = new Boton3D(letra, TECLA, TECLA, COLOR.crema, COLOR.azul);
+        const t = new Boton3D(letra, TECLA, TECLA, BOTON.secundario);
         t.grupo.position.set((k - (fila.length - 1) / 2) * PASO, (2 - f) * PASO + PASO / 2, 0);
         t.alPresionar = () => this.alTecla(letra);
         this.grupo.add(t.grupo);
         this.teclas.push(t);
       });
     });
-    const borrar = new Boton3D('⌫', TECLA * 2, TECLA, COLOR.arena, COLOR.azul);
+    const borrar = new Boton3D('⌫', TECLA * 2, TECLA, BOTON.secundario);
     borrar.grupo.position.set(4 * PASO, -PASO * 1.5, 0);
     borrar.alPresionar = () => this.alBorrar();
-    const espacio = new Boton3D('espacio', PASO * 4.5, TECLA, COLOR.crema, COLOR.azul);
+    const espacio = new Boton3D('espacio', PASO * 4.5, TECLA, BOTON.secundario);
     espacio.grupo.position.set(-0.4 * PASO, -PASO * 1.5, 0);
     espacio.alPresionar = () => this.alTecla(' ');
     this.grupo.add(borrar.grupo, espacio.grupo);
@@ -57,112 +57,115 @@ export class Teclado {
 }
 
 // ---- Chat ----------------------------------------------------------
+//
+// Sin teclado ni texto libre: solo botones con mensajes ya escritos.
+// Un botón por categoría con la "foto" de su producto (la misma de la
+// fila de la estantería): el despachador pide ("Necesito …") y el
+// receptor avisa ("Llegó …"). Más un mensaje general por rol.
 
 export interface MensajeChat {
   id: number;
   de: Rol;
   texto: string;
+  /** Si el mensaje es sobre una categoría (se dibuja su ícono). */
+  cat?: IdCategoria;
 }
 
-export const RAPIDOS: Record<Rol, string[]> = {
-  receptor: ['¿Qué necesitas?', 'Llegó agua', 'Ropa llena'],
-  despachador: ['Necesito agua', 'Necesito cobijas', '¡Gracias!'],
+/** Lo que dice cada rol con los botones de categoría. */
+export const VERBO: Record<Rol, string> = { despachador: 'Necesito', receptor: 'Llegó' };
+
+export const GENERAL: Record<Rol, string> = {
+  receptor: '¿Qué necesitas?',
+  despachador: '¡Gracias!',
 };
 
 /** Chat dibujado en un lienzo, con sus botones debajo. */
 export class Chat {
   readonly grupo = new Group();
   readonly botones: Boton3D[] = [];
-  readonly escribir: Boton3D;
-  readonly enviar: Boton3D;
-  borrador = '';
-  escribiendo = false;
-  alEnviar: (texto: string) => void = () => undefined;
+  alEnviar: (texto: string, cat?: IdCategoria) => void = () => undefined;
   private lienzo: Lienzo;
+  private iconos: Partial<Record<IdCategoria, HTMLCanvasElement>> = {};
 
   constructor(
     private yo: Rol,
     ancho: number,
+    icono: (cat: IdCategoria) => HTMLCanvasElement,
   ) {
     this.lienzo = new Lienzo(900, 560, ancho);
     this.grupo.add(this.lienzo.malla);
     const alto = (ancho * 560) / 900;
-    const anchoB = ancho / 3 - 0.008;
-    RAPIDOS[yo].forEach((texto, i) => {
-      const b = new Boton3D(texto, anchoB, 0.034, COLOR.petroleo);
-      b.grupo.position.set((i - 1) * (anchoB + 0.008), -alto / 2 - 0.024, 0);
-      b.alPresionar = () => this.alEnviar(texto);
+    const anchoB = ancho / 4 - 0.006;
+    const fila = (i: number) => -alto / 2 - 0.026 - Math.floor(i / 4) * 0.044;
+    const columna = (i: number) => ((i % 4) - 1.5) * (anchoB + 0.006);
+    CATEGORIAS.forEach((cat, i) => {
+      const b = new Boton3D(cat.corto, anchoB, 0.038, BOTON.secundario);
+      this.iconos[cat.id] = icono(cat.id);
+      b.ponerIcono(this.iconos[cat.id]!);
+      b.grupo.position.set(columna(i), fila(i), 0);
+      b.alPresionar = () => this.alEnviar(`${VERBO[yo]} ${cat.corto.toLowerCase()}`, cat.id);
       this.grupo.add(b.grupo);
       this.botones.push(b);
     });
-    this.escribir = new Boton3D('Escribir', ancho / 2 - 0.01, 0.034, COLOR.arena, COLOR.azul);
-    this.escribir.grupo.position.set(-ancho / 4, -alto / 2 - 0.064, 0);
-    this.escribir.alPresionar = () => {
-      this.escribiendo = !this.escribiendo;
-    };
-    this.enviar = new Boton3D('Enviar', ancho / 2 - 0.01, 0.034, COLOR.rojo);
-    this.enviar.grupo.position.set(ancho / 4, -alto / 2 - 0.064, 0);
-    this.enviar.alPresionar = () => {
-      const t = this.borrador.trim();
-      if (t) {
-        this.alEnviar(t);
-        this.borrador = '';
-      }
-      this.escribiendo = false;
-    };
-    this.grupo.add(this.escribir.grupo, this.enviar.grupo);
-    this.botones.push(this.escribir, this.enviar);
+    const general = new Boton3D(GENERAL[yo], anchoB * 2 + 0.006, 0.038, BOTON.principal);
+    general.grupo.position.set((columna(6) + columna(7)) / 2, fila(6), 0);
+    general.alPresionar = () => this.alEnviar(GENERAL[yo]);
+    this.grupo.add(general.grupo);
+    this.botones.push(general);
   }
 
-  pintar(mensajes: MensajeChat[], conectado: boolean, tiempo: number): void {
+  pintar(mensajes: MensajeChat[], conectado: boolean): void {
     const l = this.lienzo;
     const { ctx } = l;
-    fondoPanel(l, '#FFFFFF');
+    fondoPanel(l, '#FFF8EC');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = COLOR.azul;
     ctx.font = `900 40px ${FUENTE}`;
-    ctx.fillText(`Chat con el ${this.yo === 'receptor' ? 'despachador' : 'receptor'}`, 34, 58);
+    ctx.fillText(`Mensajes con el ${this.yo === 'receptor' ? 'despachador' : 'receptor'}`, 34, 58);
     ctx.fillStyle = conectado ? COLOR.verde : COLOR.rojo;
     ctx.beginPath();
     ctx.arc(l.ancho - 50, 44, 12, 0, Math.PI * 2);
     ctx.fill();
     // Últimos mensajes, de abajo hacia arriba.
-    let y = 430;
-    ctx.font = `400 32px ${FUENTE}`;
-    for (let i = mensajes.length - 1; i >= 0 && y > 90; i--) {
+    let y = 530;
+    ctx.font = `700 34px ${FUENTE}`;
+    for (let i = mensajes.length - 1; i >= 0 && y > 150; i--) {
       const m = mensajes[i];
       const mio = m.de === this.yo;
-      const partes = lineas(ctx, m.texto, l.ancho - 260).slice(0, 2);
-      const alto = 22 + partes.length * 38;
-      const ancho = Math.min(l.ancho - 200, Math.max(...partes.map((p) => ctx.measureText(p).width)) + 40);
+      const icono = m.cat ? (this.iconos[m.cat] ?? null) : null;
+      // Con categoría: "Necesito" + ícono + nombre; si no, el texto.
+      const texto = m.cat ? VERBO[m.de] : m.texto;
+      const nombre = m.cat ? (CATEGORIAS.find((c) => c.id === m.cat)?.corto ?? '') : '';
+      const alto = icono ? 92 : 64;
+      ctx.font = `700 34px ${FUENTE}`;
+      const anchoTexto = ctx.measureText(texto).width;
+      ctx.font = `400 26px ${FUENTE}`;
+      const anchoNombre = nombre ? ctx.measureText(nombre).width : 0;
+      const ancho = Math.min(l.ancho - 120, 40 + anchoTexto + (icono ? 14 + 76 + 10 + anchoNombre : 0));
       const x = mio ? l.ancho - 34 - ancho : 34;
-      ctx.fillStyle = mio ? COLOR.petroleo : COLOR.arena;
-      rect(ctx, x, y - alto, ancho, alto, 22);
+      ctx.fillStyle = mio ? BOTON.principal : '#F3E4CB';
+      rect(ctx, x, y - alto, ancho, alto, alto / 2);
       ctx.fill();
-      ctx.fillStyle = mio ? '#FFFFFF' : COLOR.azul;
-      partes.forEach((p, k) => ctx.fillText(p, x + 20, y - alto + 44 + k * 38));
+      ctx.fillStyle = mio ? BOTON.textoClaro : BOTON.textoOscuro;
+      ctx.font = `700 34px ${FUENTE}`;
+      ctx.fillText(texto, x + 22, y - alto / 2 + 12);
+      if (icono) {
+        const xi = x + 22 + anchoTexto + 14;
+        ctx.drawImage(icono, xi, y - alto + 8, 76, 76);
+        ctx.font = `400 26px ${FUENTE}`;
+        ctx.fillText(nombre, xi + 86, y - alto / 2 + 10);
+      }
       y -= alto + 12;
     }
-    // Lo que se está escribiendo.
-    ctx.fillStyle = this.escribiendo ? COLOR.amarillo : '#F3EEE6';
-    rect(ctx, 30, 460, l.ancho - 60, 66, 24);
-    ctx.fill();
-    ctx.fillStyle = this.borrador || this.escribiendo ? COLOR.azul : COLOR.gris;
-    ctx.font = `400 32px ${FUENTE}`;
-    const cursor = this.escribiendo && Math.sin(tiempo * 6) > 0 ? '|' : '';
-    textoAjustadoIzq(ctx, (this.borrador || (this.escribiendo ? '' : 'Empuja "Escribir" y usa el teclado')) + cursor, 54, 504, l.ancho - 110);
+    if (mensajes.length === 0) {
+      ctx.fillStyle = COLOR.gris;
+      ctx.font = `400 30px ${FUENTE}`;
+      ctx.textAlign = 'center';
+      ctx.fillText('Usa los botones de abajo para escribirle.', l.ancho / 2, 320);
+    }
     l.listo();
-    this.escribir.escribir(this.escribiendo ? 'Escribiendo…' : 'Escribir');
   }
-}
-
-function textoAjustadoIzq(ctx: CanvasRenderingContext2D, texto: string, x: number, y: number, ancho: number): void {
-  let t = texto;
-  while (t.length > 1 && ctx.measureText(t).width > ancho) {
-    t = t.slice(1);
-  }
-  ctx.fillText(t, x, y);
 }
 
 // ---- Formulario del receptor ---------------------------------------
@@ -202,7 +205,7 @@ export class Formulario {
     };
     this.campos = { nombre: campo('nombre', 170), cedula: campo('cedula', 270), cantidad: campo('cantidad', 520) };
     CATEGORIAS.forEach((cat, i) => {
-      const b = new Boton3D(cat.corto, ancho * 0.24, 0.032, COLOR.arena, COLOR.azul);
+      const b = new Boton3D(cat.corto, ancho * 0.24, 0.032, BOTON.secundario);
       const [x, y] = pos(300 + (i % 3) * 270, 365 + Math.floor(i / 3) * 70);
       b.grupo.position.set(x, y, 0.004);
       b.alPresionar = () => {
@@ -212,10 +215,10 @@ export class Formulario {
       this.categorias.push(b);
       this.botones.push(b);
     });
-    this.registrar = new Boton3D('Registrar', ancho * 0.36, 0.044, COLOR.verde, '#FFFFFF');
+    this.registrar = new Boton3D('Registrar', ancho * 0.36, 0.044, BOTON.principal);
     const [rx, ry] = pos(300, 660);
     this.registrar.grupo.position.set(rx, ry, 0.004);
-    this.rechazar = new Boton3D('Rechazar', ancho * 0.36, 0.044, COLOR.rojo, '#FFFFFF');
+    this.rechazar = new Boton3D('Rechazar', ancho * 0.36, 0.044, BOTON.peligro);
     const [jx, jy] = pos(720, 660);
     this.rechazar.grupo.position.set(jx, jy, 0.004);
     this.grupo.add(this.registrar.grupo, this.rechazar.grupo);
@@ -297,10 +300,13 @@ export class Formulario {
 export type EstadoCat = 'necesita' | 'no' | 'urgente';
 
 export const ESTILO_ESTADO: Record<EstadoCat, { texto: string; color: string; letra: string }> = {
-  necesita: { texto: 'Se necesita', color: '#F2B84B', letra: COLOR.azul },
-  no: { texto: 'No se necesita', color: COLOR.gris, letra: '#FFFFFF' },
-  urgente: { texto: 'Urgente', color: COLOR.rojo, letra: '#FFFFFF' },
+  necesita: { texto: 'Se necesita', color: '#F2C14E', letra: '#12406E' },
+  no: { texto: 'No se necesita', color: '#FFF8EC', letra: '#12406E' },
+  urgente: { texto: 'Urgente', color: '#CC0100', letra: '#FFF6E6' },
 };
+
+/** Punto de color de la placa (COLOR_ESTADO de la página). */
+export const PUNTO_ESTADO: Record<EstadoCat, string> = { urgente: '#CC0100', necesita: '#F2C14E', no: '#B8AD9C' };
 
 export class PanelEstado {
   readonly grupo = new Group();

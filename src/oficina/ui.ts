@@ -5,14 +5,16 @@
 // Todo el texto en Roboto (tipografía del proyecto).
 // ============================================================
 import {
-  BoxGeometry,
   CanvasTexture,
+  Color,
+  ExtrudeGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   SRGBColorSpace,
+  Shape,
 } from '@iwsdk/core';
 import { COLOR } from './datos.js';
 
@@ -115,9 +117,56 @@ export function fondoPanel(l: Lienzo, color: string = COLOR.crema): void {
 }
 
 // ---- Botón físico 3D -------------------------------------------------
+//
+// Igual a los botones de la página (css/tema.css): píldora "gordita" y
+// mate, con un degradado vertical (más claro arriba, más oscuro abajo),
+// un brillo fino arriba (--relieve-claro) y una sombra interior abajo.
+// Paleta del administrador: principal azul #1F5490 con texto crema;
+// secundario crema con texto azul #12406E; peligro rojo #CC0100.
 
-const GROSOR = 0.02;
+export const BOTON = {
+  principal: '#1F5490',
+  secundario: '#FFF8EC',
+  peligro: '#CC0100',
+  exito: '#3E7A6C',
+  textoClaro: '#FFF6E6',
+  textoOscuro: '#12406E',
+  /** Botón deshabilitado de la página (.boton:disabled). */
+  apagado: '#E8E1D5',
+  textoApagado: '#6E655D',
+};
+
+const GROSOR = 0.014;
 export const HUNDIDO_MAX = 0.015;
+
+function luz(hex: string): number {
+  const c = new Color(hex);
+  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+}
+
+function tono(hex: string, cambio: number): string {
+  const c = new Color(hex);
+  c.offsetHSL(0, 0, cambio);
+  return `#${c.getHexString()}`;
+}
+
+/** Radio de las esquinas: píldora, o redondeado si el botón es casi cuadrado. */
+const radioDe = (w: number, h: number) => Math.min(h / 2, w / 2) * (w < h * 1.4 ? 0.7 : 1);
+
+function pildora(w: number, h: number): Shape {
+  const r = radioDe(w, h);
+  const s = new Shape();
+  s.moveTo(-w / 2 + r, -h / 2);
+  s.lineTo(w / 2 - r, -h / 2);
+  s.absarc(w / 2 - r, -h / 2 + r, r, -Math.PI / 2, 0, false);
+  s.lineTo(w / 2, h / 2 - r);
+  s.absarc(w / 2 - r, h / 2 - r, r, 0, Math.PI / 2, false);
+  s.lineTo(-w / 2 + r, h / 2);
+  s.absarc(-w / 2 + r, h / 2 - r, r, Math.PI / 2, Math.PI, false);
+  s.lineTo(-w / 2, -h / 2 + r);
+  s.absarc(-w / 2 + r, -h / 2 + r, r, Math.PI, Math.PI * 1.5, false);
+  return s;
+}
 
 export class Boton3D {
   /** Se mueve y gira con su panel; su cara mira hacia +Z. */
@@ -126,6 +175,7 @@ export class Boton3D {
   private material: MeshStandardMaterial;
   private cara: Lienzo;
   private texto = '';
+  private icono: HTMLCanvasElement | null = null;
   private _activo = true;
   /** Si es false, el botón ni se ve ni se presiona. */
   get activo(): boolean {
@@ -135,7 +185,7 @@ export class Boton3D {
     this._activo = valor;
     this.grupo.visible = valor;
   }
-  /** Bloqueado: se ve gris; al empujarlo llama a alBloqueado. */
+  /** Bloqueado: se ve como el botón apagado de la página; al empujarlo llama a alBloqueado. */
   bloqueado = false;
   hundido = 0;
   /** Momento del último toque (para el brillo al presionar). */
@@ -147,34 +197,88 @@ export class Boton3D {
     texto: string,
     readonly anchoM: number,
     readonly altoM: number,
-    private color: string = COLOR.rojo,
-    private colorTexto: string = COLOR.crema,
+    private color: string = BOTON.principal,
+    private colorTexto: string = luz(color) > 0.6 ? BOTON.textoOscuro : BOTON.textoClaro,
   ) {
-    this.material = new MeshStandardMaterial({ color, roughness: 0.75 });
-    this.cuerpo = new Mesh(new BoxGeometry(anchoM, altoM, GROSOR), this.material);
-    this.cuerpo.position.z = GROSOR / 2;
+    // Cuerpo: la píldora extruida con bordes redondeados (el "relieve").
+    const geometria = new ExtrudeGeometry(pildora(anchoM, altoM), {
+      depth: GROSOR * 0.5,
+      bevelEnabled: true,
+      bevelThickness: GROSOR * 0.25,
+      bevelSize: Math.min(anchoM, altoM) * 0.06,
+      bevelSegments: 3,
+    });
+    geometria.translate(0, 0, -GROSOR * 0.25);
+    this.material = new MeshStandardMaterial({ color: tono(color, -0.08), roughness: 0.85, metalness: 0 });
+    this.cuerpo = new Mesh(geometria, this.material);
+    // Cara: el dibujo del botón de la página (degradado, brillo y texto).
     const px = 512;
-    this.cara = new Lienzo(px, Math.max(64, Math.round((px * altoM) / anchoM)), anchoM * 0.96);
-    this.cara.malla.position.z = GROSOR / 2 + 0.0008;
+    this.cara = new Lienzo(px, Math.max(64, Math.round((px * altoM) / anchoM)), anchoM);
+    this.cara.malla.position.z = GROSOR * 0.75 + 0.0006;
     this.cara.malla.renderOrder = 12;
     this.cuerpo.add(this.cara.malla);
     this.grupo.add(this.cuerpo);
     this.escribir(texto);
   }
 
+  /** Ícono (canvas) a la izquierda del texto, p. ej. la foto de un producto. */
+  ponerIcono(icono: HTMLCanvasElement | null): void {
+    this.icono = icono;
+    this.escribir(this.texto);
+  }
+
   escribir(texto: string, color?: string): void {
     if (color) {
       this.color = color;
+      this.colorTexto = luz(color) > 0.6 ? BOTON.textoOscuro : BOTON.textoClaro;
     }
     this.texto = texto;
+    const fondo = this.bloqueado ? BOTON.apagado : this.color;
     const { ctx } = this.cara;
+    const w = this.cara.ancho;
+    const h = this.cara.alto;
+    const r = radioDe(w, h);
     this.cara.limpiar();
-    ctx.fillStyle = this.bloqueado ? '#5E5953' : this.colorTexto;
-    ctx.textAlign = 'center';
+    // Relleno de la página: degradado vertical claro → color → oscuro.
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, tono(fondo, 0.05));
+    g.addColorStop(0.55, fondo);
+    g.addColorStop(1, tono(fondo, -0.05));
+    ctx.fillStyle = g;
+    rect(ctx, 0, 0, w, h, r);
+    ctx.fill();
+    // --relieve-claro: brillo fino arriba y sombra interior abajo.
+    ctx.save();
+    rect(ctx, 0, 0, w, h, r);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fillRect(0, 0, w, Math.max(2, h * 0.04));
+    const sombra = ctx.createLinearGradient(0, h * 0.82, 0, h);
+    sombra.addColorStop(0, 'rgba(18, 64, 110, 0)');
+    sombra.addColorStop(1, 'rgba(18, 64, 110, 0.16)');
+    ctx.fillStyle = sombra;
+    ctx.fillRect(0, h * 0.82, w, h * 0.18);
+    ctx.restore();
+    // Ícono y texto (Roboto 700).
+    ctx.fillStyle = this.bloqueado ? BOTON.textoApagado : this.colorTexto;
     ctx.textBaseline = 'middle';
-    textoAjustado(ctx, texto, this.cara.ancho / 2, this.cara.alto / 2 + 2, this.cara.ancho - 30, Math.min(64, this.cara.alto * 0.55));
+    const tam = Math.min(64, h * 0.5);
+    if (this.icono) {
+      const lado = h * 0.8;
+      ctx.font = `700 ${tam}px ${FUENTE}`;
+      const anchoTexto = texto ? Math.min(w - lado - 70, ctx.measureText(texto).width) : 0;
+      const x0 = (w - lado - (texto ? 14 + anchoTexto : 0)) / 2;
+      ctx.drawImage(this.icono, x0, (h - lado) / 2, lado, lado);
+      if (texto) {
+        ctx.textAlign = 'left';
+        textoAjustadoIzq(ctx, texto, x0 + lado + 14, h / 2 + 2, anchoTexto, tam);
+      }
+    } else {
+      ctx.textAlign = 'center';
+      textoAjustado(ctx, texto, w / 2, h / 2 + 2, w - Math.max(30, r * 0.8), tam);
+    }
     this.cara.listo();
-    this.pintar(0);
+    this.material.color.set(tono(fondo, -0.08));
   }
 
   bloquear(bloqueado: boolean): void {
@@ -184,13 +288,10 @@ export class Boton3D {
     }
   }
 
-  /** Color según el estado (y un brillo corto al presionarlo). */
+  /** Un brillo corto al presionarlo. */
   pintar(tiempo: number): void {
-    const base = this.bloqueado ? COLOR.gris : this.color;
-    this.material.color.set(base);
-    if (tiempo - this.tocadoEn < 0.25) {
-      this.material.color.offsetHSL(0, 0, 0.18);
-    }
+    const m = this.cara.malla.material as MeshBasicMaterial;
+    m.color.setScalar(tiempo - this.tocadoEn < 0.2 ? 0.82 : 1);
   }
 
   /** Visible en la escena (él y todos sus padres). */
@@ -208,13 +309,24 @@ export class Boton3D {
     return true;
   }
 
-  /** Hunde el cuerpo (z local del dedo respecto a la cara del botón). */
+  /** Hunde el botón hasta 1,5 cm (lo que entró la punta del índice). */
   hundir(cantidad: number): void {
     this.hundido = Math.max(0, Math.min(HUNDIDO_MAX, cantidad));
-    this.cuerpo.position.z = GROSOR / 2 - this.hundido;
+    this.cuerpo.position.z = -this.hundido;
   }
 
+  /** Distancia de la cara del botón a su base (para el toque con el índice). */
   get grosor(): number {
-    return GROSOR;
+    return GROSOR * 0.75;
   }
+}
+
+function textoAjustadoIzq(ctx: CanvasRenderingContext2D, texto: string, x: number, y: number, ancho: number, tam: number): void {
+  let t = tam;
+  ctx.font = `700 ${t}px ${FUENTE}`;
+  while (t > 18 && ctx.measureText(texto).width > ancho) {
+    t -= 2;
+    ctx.font = `700 ${t}px ${FUENTE}`;
+  }
+  ctx.fillText(texto, x, y);
 }

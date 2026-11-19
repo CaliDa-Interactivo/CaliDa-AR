@@ -12,6 +12,11 @@ const glb = (archivo: string, name: string) => ({
 });
 
 export default defineAssets({
+  // Modelos de la página, simplificados para llenar la repisa de la RA.
+  ra_agua: glb('ra/agua', 'Agua (RA)'),
+  ra_lata: glb('ra/alimento_no_perecedero', 'Lata (RA)'),
+  ra_camisa: glb('ra/camisa', 'Camisa (RA)'),
+  ra_papel: glb('ra/papel_higienico', 'Papel higiénico (RA)'),
   // Panel espacial (UIKitML) con las opciones del centro de acopio.
   'centro-acopio': {
     url: publicAssetUrl('ui/centro-acopio.uikitml'),

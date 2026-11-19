@@ -5,7 +5,8 @@
 //
 //   · Sesión:  navigator.xr.isSessionSupported('immersive-ar')
 //              y session.enabledFeatures (qué concedió el visor)
-//   · Planos:  XRFrame.detectedPlanes  → encontrar una mesa real
+//   · Planos:  XRFrame.detectedPlanes  → encontrar el piso (o una mesa)
+//   · Superficie: hit-test              → el piso si no hay planos
 //   · Anclas:  XRFrame.createAnchor    → la mesa de trabajo queda
 //              fija al mundo real aunque la persona camine
 //
@@ -173,5 +174,93 @@ export class AnclaWebXR {
     this.pedido++;
     this.ancla?.delete();
     this.ancla = null;
+  }
+}
+
+/**
+ * Encuentra el piso real para poner la mesa flotante a la altura de la
+ * cintura. Primero con los planos que detectó el visor (plane-detection:
+ * el de etiqueta "floor" o el horizontal más bajo); si no hay planos, con
+ * la prueba de superficie (hit-test) de un rayo que sale de la cabeza hacia
+ * abajo y adelante. Si nada responde, `piso` queda en null y se usa el piso
+ * del espacio de referencia (y = 0) con el botón manual "Colocar aquí".
+ */
+export class SondaPiso {
+  piso: number | null = null;
+  /** De dónde salió: 'planos', 'superficie' o null. */
+  fuente: 'planos' | 'superficie' | null = null;
+  private hit: XRHitTestSource | null = null;
+  private sesion: XRSession | null = null;
+
+  actualizar(
+    sesion: XRSession | null | undefined,
+    cuadro: XRFrame | null | undefined,
+    espacio: XRReferenceSpace | null | undefined,
+    cabezaY: number,
+  ): void {
+    if (!sesion || !cuadro || !espacio) {
+      return;
+    }
+    if (sesion !== this.sesion) {
+      this.sesion = sesion;
+      this.hit = null;
+      this.piso = null;
+      this.fuente = null;
+      this.pedirSuperficie(sesion);
+    }
+    let y = Infinity;
+    let fuente: SondaPiso['fuente'] = null;
+    for (const plano of cuadro.detectedPlanes ?? []) {
+      if (String(plano.orientation).toLowerCase() !== 'horizontal') {
+        continue;
+      }
+      const pose = cuadro.getPose(plano.planeSpace, espacio);
+      if (!pose) {
+        continue;
+      }
+      const py = pose.transform.position.y;
+      const etiqueta = String(plano.semanticLabel ?? '').toLowerCase();
+      if ((etiqueta === 'floor' || py < cabezaY - 1.0) && py < y) {
+        y = py;
+        fuente = 'planos';
+      }
+    }
+    if (!fuente && this.hit) {
+      const resultado = cuadro.getHitTestResults(this.hit)[0];
+      const pose = resultado?.getPose(espacio);
+      if (pose && pose.transform.position.y < cabezaY - 0.9) {
+        y = pose.transform.position.y;
+        fuente = 'superficie';
+      }
+    }
+    if (fuente) {
+      this.piso = this.piso === null ? y : this.piso + (y - this.piso) * 0.1;
+      this.fuente = fuente;
+    }
+  }
+
+  private pedirSuperficie(sesion: XRSession): void {
+    if (!sesion.requestHitTestSource || typeof XRRay === 'undefined') {
+      return;
+    }
+    sesion
+      .requestReferenceSpace('viewer')
+      .then((visor) =>
+        sesion.requestHitTestSource!({
+          space: visor,
+          offsetRay: new XRRay({ x: 0, y: 0, z: 0, w: 1 }, { x: 0, y: -0.85, z: -0.5, w: 0 }),
+        }),
+      )
+      .then((fuente) => {
+        if (!fuente) {
+          return;
+        }
+        if (this.sesion === sesion) {
+          this.hit = fuente;
+        } else {
+          fuente.cancel();
+        }
+      })
+      .catch(() => undefined);
   }
 }

@@ -1,10 +1,15 @@
 // ============================================================
 // interaccion.ts — agarrar, llevar, soltar y empujar botones.
 //
-//  · Agarrar: la mano se cierra (puño) tocando un "agarrable" (la
-//    palma a menos de ~6 cm de su caja). El objeto sigue a la mano;
-//    al abrirla se suelta y el agarrable decide: snap animado a un
-//    puesto válido, o cae hasta la mesa o el piso.
+//  · Agarrar: la palma de canto (vertical) a menos de ~6 cm de un
+//    "agarrable" lo resalta; al cerrar el puño se agarra. Lo que se
+//    lleva va en el centro de la palma, un poco afuera de los nudillos,
+//    conserva el giro con que se tomó y sigue la muñeca suavizado
+//    (~50 ms); lo grande se achica un poco y siempre se ve encima de
+//    la mano. Al abrirla se suelta y el agarrable decide: snap animado
+//    a un puesto válido, o cae hasta la mesa o el piso.
+//  · Sonidos: "pop" al agarrar; el juego suena el acierto o el error
+//    al soltar en un puesto; si solo cae, un golpe suave.
 //  · Contorno: blanco cuando la mano está cerca, verde mientras se
 //    lleva sobre un puesto válido, rojo sobre uno que no sirve.
 //  · Botones: se presionan empujando con la punta del índice.
@@ -13,16 +18,22 @@
 // ============================================================
 import {
   Box3,
+  Mesh,
+  MeshBasicMaterial,
   Plane,
+  PlaneGeometry,
+  Quaternion,
   Raycaster,
   Vector2,
   Vector3,
   type Camera,
   type Object3D,
+  type WebGLRenderer,
 } from '@iwsdk/core';
 import type { Animador } from '../guion/animador.js';
 import { COLOR } from './datos.js';
 import { Mano, type Manos } from './manos.js';
+import { ponerEncima } from './oclusion.js';
 import { Contorno } from './objetos.js';
 import { HUNDIDO_MAX, type Boton3D } from './ui.js';
 
@@ -42,6 +53,8 @@ export interface Agarrable {
   contornoDe?: (llevado: Object3D) => ConContorno | null;
   /** Contorno en reposo (p. ej. rojo si está dañado). */
   reposo?: (obj: Object3D) => void;
+  /** Se agarra con la palma en cualquier posición (p. ej. metiendo la mano en una caja). */
+  palmaLibre?: boolean;
 }
 
 /** Algo que se puede resaltar con un color (o apagar con null). */
@@ -52,10 +65,43 @@ export interface ConContorno {
 interface Llevado {
   ag: Agarrable;
   obj: Object3D;
+  /** Solo para el mouse: distancia fija al punto agarrado. */
   offset: Vector3;
+  /** Giro del objeto respecto a la mano al agarrarlo. */
+  giroRel: Quaternion;
+  /** Centro del objeto en sus coordenadas (para centrarlo en la palma). */
+  centro: Vector3;
+  /** Punto y giro suavizados (en el mundo). */
+  punto: Vector3;
+  giro: Quaternion;
+  escala0: Vector3;
+  giro0: Quaternion;
+  /** Factor para achicar lo grande mientras se lleva. */
+  achicar: number;
+  restaurar: () => void;
+  limpiador: Mesh;
 }
 
 const ALCANCE = 0.06;
+/** La palma cuenta como vertical si su normal no mira mucho arriba ni abajo. */
+const VERTICAL = 0.62;
+/** Suavizado del seguimiento de la muñeca (segundos). */
+const SUAVE = 0.05;
+/** Lo que mide más que esto se achica mientras se lleva. */
+const GRANDE = 0.16;
+
+const MATERIAL_LIMPIADOR = new MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false, transparent: true });
+const GEOMETRIA_LIMPIADOR = new PlaneGeometry(0.001, 0.001);
+
+/** Malla mínima que borra la profundidad justo antes de dibujar lo que se lleva. */
+function crearLimpiador(): Mesh {
+  const m = new Mesh(GEOMETRIA_LIMPIADOR, MATERIAL_LIMPIADOR);
+  m.renderOrder = 999;
+  m.frustumCulled = false;
+  m.userData.sinContorno = true;
+  m.onBeforeRender = (renderer: WebGLRenderer) => renderer.clearDepth();
+  return m;
+}
 
 export class Interaccion {
   readonly agarrables: Agarrable[] = [];
@@ -66,6 +112,10 @@ export class Interaccion {
   sonar: (que: 'agarrar' | 'soltar' | 'boton' | 'bloqueado') => void = () => undefined;
   private llevando = new Map<Mano, Llevado>();
   private hover = new Map<Mano, Agarrable>();
+  /** Último hover de cada mano (para agarrar mientras el puño se cierra). */
+  private ultimoHover = new Map<Mano, { ag: Agarrable; t: number }>();
+  private q = new Quaternion();
+  private q2 = new Quaternion();
   private contornos = new Map<Object3D, Contorno>();
   private dentro = new Map<Boton3D, Set<Mano>>();
   private caja = new Box3();
@@ -100,6 +150,9 @@ export class Interaccion {
   /** Suelta todo sin avisar (cambio de fase). */
   soltarTodo(): void {
     for (const [, l] of this.llevando) {
+      l.restaurar();
+      l.obj.scale.copy(l.escala0);
+      l.obj.quaternion.copy(l.giro0);
       this.reposar(l);
     }
     this.llevando.clear();
@@ -146,9 +199,7 @@ export class Interaccion {
       }
       const llevado = this.llevando.get(mano);
       if (llevado) {
-        // Sigue a la mano.
-        this.w.copy(mano.palma).add(llevado.offset);
-        llevado.obj.position.copy(this.raiz.worldToLocal(this.w));
+        this.seguirMano(llevado, mano, dt);
         const d = llevado.ag.destino?.(llevado.obj) ?? null;
         this.contornoDe(llevado).poner(d === 'valido' ? COLOR.verde : d === 'invalido' ? COLOR.rojo : '#FFFFFF');
         if (mano.recienAbierta || !mano.cerrada) {
@@ -157,7 +208,15 @@ export class Interaccion {
         continue;
       }
       // Mano libre: ¿toca algo?
-      const cerca = mano === this.raton ? this.arrastre : this.masCercano(mano);
+      let cerca = mano === this.raton ? this.arrastre : this.masCercano(mano, true);
+      if (cerca && mano !== this.raton) {
+        this.ultimoHover.set(mano, { ag: cerca, t: this.tiempo });
+      }
+      // Al cerrar el puño la palma se mueve un poco: vale el hover de hace un momento.
+      const u = this.ultimoHover.get(mano);
+      if (!cerca && mano.recienCerrada && u && this.tiempo - u.t < 0.4 && this.masCercano(mano, false, ALCANCE * 1.6) === u.ag) {
+        cerca = u.ag;
+      }
       const antes = this.hover.get(mano);
       if (antes && antes !== cerca) {
         this.reposar({ ag: antes, obj: antes.obj });
@@ -174,11 +233,15 @@ export class Interaccion {
     this.botonesConIndice();
   }
 
-  private masCercano(mano: Mano): Agarrable | null {
+  private masCercano(mano: Mano, vertical: boolean, alcance = ALCANCE): Agarrable | null {
     let mejor: Agarrable | null = null;
-    let dist = ALCANCE;
+    let dist = alcance;
+    const deCanto = mano.tipo !== 'mano' || Math.abs(mano.normal.y) < VERTICAL;
     for (const ag of this.agarrables) {
       if (!ag.activo() || !this.visible(ag.obj) || this.ocupado(ag)) {
+        continue;
+      }
+      if (vertical && !deCanto && !ag.palmaLibre) {
         continue;
       }
       this.caja.setFromObject(ag.obj);
@@ -211,23 +274,90 @@ export class Interaccion {
       return;
     }
     this.anim.cancelar(obj);
+    obj.updateWorldMatrix(true, true);
     obj.getWorldPosition(this.v);
-    const offset = this.v.sub(mano.palma).clone();
+    const offset = this.v.clone().sub(mano.palma);
     // Lo que sale nuevo (de una caja o de la repisa) va justo en la mano.
     if (obj !== ag.obj || offset.length() > 0.12) {
       offset.set(0, -0.03, 0);
     }
-    this.llevando.set(mano, { ag, obj, offset });
+    this.caja.setFromObject(obj);
+    const tam = this.caja.getSize(this.w);
+    const mayor = Math.max(tam.x, tam.y, tam.z);
+    const centro = obj.worldToLocal(this.caja.getCenter(new Vector3()));
+    obj.getWorldQuaternion(this.q);
+    const limpiador = crearLimpiador();
+    const l: Llevado = {
+      ag,
+      obj,
+      offset,
+      giroRel: mano.giro.clone().invert().multiply(this.q),
+      centro,
+      punto: this.v.clone(),
+      giro: this.q.clone(),
+      escala0: obj.scale.clone(),
+      giro0: obj.quaternion.clone(),
+      achicar: mayor > GRANDE ? Math.max(0.55, GRANDE / mayor) : 1,
+      restaurar: () => undefined,
+      limpiador,
+    };
+    // Primero el contorno (para que también quede encima).
+    this.contornoDe(l);
+    l.restaurar = ponerEncima(obj, limpiador);
+    this.llevando.set(mano, l);
     this.sonar('agarrar');
     mano.vibrar(0.4, 40);
+  }
+
+  /** El objeto sigue a la mano: posición y giro suavizados (~50 ms). */
+  private seguirMano(l: Llevado, mano: Mano, dt: number): void {
+    const obj = l.obj;
+    const padre = obj.parent;
+    if (!padre) {
+      return;
+    }
+    if (mano === this.raton) {
+      this.w.copy(mano.palma).add(l.offset);
+      obj.position.copy(padre.worldToLocal(this.w));
+      return;
+    }
+    const k = 1 - Math.exp(-dt / SUAVE);
+    // Achicar lo grande poco a poco.
+    this.w.copy(l.escala0).multiplyScalar(l.achicar);
+    obj.scale.lerp(this.w, Math.min(1, dt * 10));
+    // Giro: el de la mano con el giro relativo del momento de agarrar.
+    this.q.copy(mano.giro).multiply(l.giroRel);
+    l.giro.slerp(this.q, k);
+    l.punto.lerp(mano.agarre, k);
+    padre.updateWorldMatrix(true, false);
+    padre.getWorldQuaternion(this.q2);
+    obj.quaternion.copy(this.q2.invert().multiply(l.giro));
+    // Que el centro del objeto (no su origen) quede en el punto de agarre.
+    padre.getWorldScale(this.w);
+    this.v
+      .copy(l.centro)
+      .multiply(obj.scale)
+      .multiply(this.w)
+      .applyQuaternion(l.giro);
+    this.w.copy(l.punto).sub(this.v);
+    obj.position.copy(padre.worldToLocal(this.w));
   }
 
   private terminar(mano: Mano): void {
     const l = this.llevando.get(mano);
     if (l) {
       this.llevando.delete(mano);
+      const d = l.ag.destino?.(l.obj) ?? null;
+      l.restaurar();
+      if (mano !== this.raton) {
+        l.obj.scale.copy(l.escala0);
+        l.obj.quaternion.copy(l.giro0);
+      }
       this.reposar(l);
-      this.sonar('soltar');
+      // En un puesto, el juego suena el acierto o el error; si solo cae, un golpe suave.
+      if (d === null) {
+        this.sonar('soltar');
+      }
       l.ag.soltar(l.obj, mano);
     }
     if (mano === this.raton) {

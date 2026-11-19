@@ -4,6 +4,7 @@ import { VisibilityState, World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { ExperienciaSystem } from './experiencia.js';
 import { GuionSystem } from './guion/maquina.js';
+import { OficinaSystem } from './oficina/juego.js';
 import { comprobarWebXR } from './webxr.js';
 
 const entrada = document.getElementById('entrada') as HTMLDivElement;
@@ -12,15 +13,18 @@ const aviso = document.getElementById('aviso') as HTMLParagraphElement;
 const estadoWebXR = document.getElementById('webxr') as HTMLParagraphElement;
 // ?prueba: recorrido con el mouse en el computador, sin la pantalla de entrada.
 const enPrueba = new URLSearchParams(window.location.search).has('prueba');
-// El guion "Cali en tu mesa" es la experiencia principal. Con ?anterior se
-// abre el primer recorrido (donante → beneficiario), que se conserva.
-const conGuion = !new URLSearchParams(window.location.search).has('anterior');
+// La experiencia principal es el centro de acopio (modo un jugador). Se
+// conservan: ?guion ("Cali en tu mesa") y ?anterior (donante → beneficiario).
+const parametros = new URLSearchParams(window.location.search);
+const modo = parametros.has('anterior') ? 'anterior' : parametros.has('guion') ? 'guion' : 'oficina';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 ).then(async (world) => {
-  if (conGuion) {
+  if (modo === 'oficina') {
+    world.registerSystem(OficinaSystem);
+  } else if (modo === 'guion') {
     world.registerSystem(GuionSystem);
   } else {
     world.registerSystem(ExperienciaSystem);

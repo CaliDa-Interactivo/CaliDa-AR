@@ -1,0 +1,1474 @@
+// ============================================================
+// juego.ts — CaliDa RA · Centro de acopio (modo un jugador).
+//
+// Flujo (diagrama del equipo):
+//   bienvenida del gato → "Colocar aquí" (se arma la oficina)
+//   → jornada (lunes a viernes, cada día más difícil):
+//       llegan cajas a la pila → tomar una y abrirla →
+//       sacar cada objeto → ¿buen estado? sí: a su fila (si hay
+//       menos de 30) / no: a la caneca → ...
+//       llega un pedido con reloj → elegir el municipio → armar la
+//       caja desde la repisa → al camión → botón → ¿a tiempo?
+//   → resumen del día → siguiente jornada … → resumen de la semana.
+//
+// Se agarra con el PUÑO y los botones se empujan con el ÍNDICE;
+// sin pellizco ni rayos (los punteros de IWSDK se apagan).
+// ============================================================
+import {
+  createSystem,
+  Group,
+  Quaternion,
+  Vector3,
+  VisibilityState,
+  type Entity,
+  type Object3D,
+} from '@iwsdk/core';
+import { Animador } from '../guion/animador.js';
+import { Gato } from '../guion/gato.js';
+import { sonidos } from '../guion/sonidos.js';
+import { crearCaja, crearTarima, type CajaArmada } from '../modelos.js';
+import { AnclaWebXR } from '../webxr.js';
+import {
+  CATEGORIAS,
+  COLOR,
+  DIAS,
+  INVENTARIO_INICIAL,
+  JORNADAS,
+  MAX_PILA,
+  MENSAJE_FINAL,
+  PESO_CATEGORIA,
+  indiceCategoria,
+  type IdCategoria,
+} from './datos.js';
+import {
+  ALTO_CAJA,
+  CANECA,
+  ESCALA_CAJA,
+  Escena,
+  PEDIDO,
+  PILA,
+  TRABAJO,
+  mirarAlCentro,
+} from './escena.js';
+import { Interaccion, type Agarrable, type Destino } from './interaccion.js';
+import { Manos } from './manos.js';
+import { completo, faltantes, type Aviso, type Pedido } from './modelo.js';
+import { Objeto } from './objetos.js';
+import { reloj, textoPedido } from './panel.js';
+import { ESCALA_REPISA } from './repisa.js';
+import { Boton3D, FUENTE, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
+
+type Fase = 'inicio' | 'colocar' | 'jornada' | 'resumen' | 'semana';
+
+interface CajaD {
+  armada: CajaArmada;
+  grupo: Group;
+  objetos: { cat: IdCategoria; danado: boolean }[];
+  estado: 'pila' | 'mano' | 'trabajo' | 'abierta' | 'fin';
+  minis: Group[];
+}
+
+interface ObjetoJuego {
+  o: Objeto;
+  origen: 'caja' | 'repisa';
+  ag: Agarrable;
+}
+
+interface Cuenta {
+  pedidos: number;
+  aTiempo: number;
+  tarde: number;
+  sinEntregar: number;
+  rechazadas: number;
+  perdidas: number;
+  errores: number;
+  quejas: number;
+  familias: number;
+  puntos: number;
+  estrellas: number;
+}
+
+const cuentaNueva = (): Cuenta => ({
+  pedidos: 0,
+  aTiempo: 0,
+  tarde: 0,
+  sinEntregar: 0,
+  rechazadas: 0,
+  perdidas: 0,
+  errores: 0,
+  quejas: 0,
+  familias: 0,
+  puntos: 0,
+  estrellas: 0,
+});
+
+const nombre = (id: IdCategoria) => CATEGORIAS.find((c) => c.id === id)!.corto;
+const dxz = (a: Vector3, b: Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
+
+export class OficinaSystem extends createSystem({}) {
+  private modoPrueba = new URLSearchParams(window.location.search).has('prueba');
+  private escena = new Escena();
+  private raizEnt!: Entity;
+  private anim = new Animador();
+  private manos = new Manos();
+  private inter!: Interaccion;
+  private gato!: Gato;
+  private ancla = new AnclaWebXR();
+  private inicio = new Group();
+  private colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.06, COLOR.rojo);
+
+  private fase: Fase = 'inicio';
+  private tiempo = 0;
+  private reinicioEn = -1;
+  private cabeza = new Vector3();
+  private frente = new Vector3();
+
+  // Jornada
+  private dia = 0;
+  private tDia = 0;
+  private siguienteEvento = 0;
+  private cuentas: Cuenta[] = [];
+  private avisos: Aviso[] = [];
+  private pedidos: Pedido[] = [];
+  private idAviso = 0;
+  private cola = 0;
+  private tCola = 0;
+  private pila: CajaD[] = [];
+  private trabajo: CajaD | null = null;
+  private sueltos: ObjetoJuego[] = [];
+  private actual: ObjetoJuego | null = null;
+  private zonaMarcada = -1;
+  private tPintar = 0;
+
+  // Caja del pedido y camión
+  private cajaPedido!: CajaArmada;
+  private cajaEnCamion = false;
+  private minisPedido: Group[] = [];
+  private camion: 'listo' | 'yendo' | 'fuera' | 'volviendo' = 'listo';
+  private tCamion = 0;
+  private baseCamion = new Vector3();
+
+  // Tutorial (lunes)
+  private tutorial = true;
+  private vistas = new Set<string>();
+  private flechaHasta = 0;
+  private flechaEn = new Vector3();
+
+  private v = new Vector3();
+  private w = new Vector3();
+  private giro = new Quaternion();
+
+  init(): void {
+    const mundo = this.world;
+    this.raizEnt = mundo.createTransformEntity(this.escena.raiz);
+    // Sin rayos ni pellizco de IWSDK: todo con puño e índice.
+    for (const lado of ['left', 'right'] as const) {
+      const mp = this.input.xr.multiPointers[lado];
+      mp.toggleSubPointer('ray', false);
+      mp.toggleSubPointer('grab', false);
+      mp.toggleSubPointer('touch', false);
+    }
+    this.inter = new Interaccion(
+      this.escena.sobre,
+      this.manos,
+      () => mundo.camera,
+      this.anim,
+      this.modoPrueba ? mundo.renderer.domElement : null,
+    );
+    this.inter.apoyo = (x, z) => this.escena.apoyo(x, z);
+    this.inter.sonar = (q) => sonidos[q]();
+    this.inter.botones.push(...this.escena.botones, this.colocarBoton);
+
+    // Inicio: botón "Colocar aquí" y el gato sobre su tarima.
+    this.inicio.add(this.colocarBoton.grupo);
+    const tarima = crearTarima();
+    tarima.scale.setScalar(0.6);
+    tarima.position.set(-0.2, -0.36, -0.02);
+    this.inicio.add(tarima);
+    this.escena.raiz.add(this.inicio);
+    this.colocarBoton.alPresionar = () => this.colocar();
+    this.gato = new Gato(mundo, this.raizEnt);
+
+    this.armarCajaPedido();
+    this.registrarAgarrables();
+    this.conectarBotones();
+
+    let anterior = mundo.visibilityState.peek();
+    this.cleanupFuncs.push(
+      mundo.visibilityState.subscribe((estado) => {
+        const antes = anterior === VisibilityState.NonImmersive;
+        const ahora = estado === VisibilityState.NonImmersive;
+        anterior = estado;
+        if (antes !== ahora) {
+          this.reinicioEn = this.tiempo + 0.5;
+        }
+      }),
+    );
+    void document.fonts?.load('700 40px Roboto').catch(() => undefined);
+    this.reiniciar();
+  }
+
+  private enXR(): boolean {
+    return this.world.visibilityState.peek() !== VisibilityState.NonImmersive;
+  }
+
+  private leerCabeza(): void {
+    const origen = this.enXR() ? this.player.head : this.world.camera;
+    origen.getWorldPosition(this.cabeza);
+    // Hacia dónde mira: el eje -Z de la cabeza (o de la cámara).
+    this.frente.set(0, 0, -1).applyQuaternion(origen.getWorldQuaternion(this.giro));
+    this.frente.y = 0;
+    if (this.frente.lengthSq() < 1e-4) {
+      this.frente.set(0, 0, -1);
+    }
+    this.frente.normalize();
+  }
+
+  // ---- Reinicio y colocación --------------------------------------
+
+  private reiniciar(): void {
+    this.anim.limpiar();
+    this.inter.soltarTodo();
+    this.ancla.soltar();
+    this.fase = 'inicio';
+    this.dia = 0;
+    this.cuentas = [];
+    this.tutorial = true;
+    this.vistas.clear();
+    this.limpiarJornada();
+    this.escena.repisa.fijar(CATEGORIAS.map((c) => INVENTARIO_INICIAL[c.id]));
+    this.escena.sobre.visible = false;
+    this.escena.raiz.children.forEach((c) => {
+      if (c !== this.escena.sobre && c !== this.inicio) {
+        c.visible = false;
+      }
+    });
+    this.mostrarInicio();
+    this.gato.decir(
+      'Esta semana gestionas un centro de acopio de la Cruz Roja en Cali. Mira al frente y empuja "Colocar aquí" con tu índice.',
+      '¡Hola! Soy tu guía',
+    );
+  }
+
+  /** Pone el botón y el gato frente a la persona. */
+  private mostrarInicio(): void {
+    this.leerCabeza();
+    const raiz = this.escena.raiz;
+    raiz.position.set(this.cabeza.x, 0, this.cabeza.z);
+    raiz.rotation.set(0, Math.atan2(-this.frente.x, -this.frente.z), 0);
+    raiz.updateWorldMatrix(true, true);
+    this.inicio.visible = true;
+    this.inicio.position.set(0.06, this.cabeza.y - 0.32, -0.45);
+    this.colocarBoton.activo = true;
+    const gato = this.gato.objeto;
+    gato.visible = true;
+    gato.scale.setScalar(1);
+    gato.position.set(this.inicio.position.x - 0.2, this.inicio.position.y - 0.33, -0.47);
+    this.gato.animar('saludar');
+  }
+
+  /** Arma la oficina donde está la persona, mirando hacia donde mira. */
+  private colocar(): void {
+    this.leerCabeza();
+    const raiz = this.escena.raiz;
+    raiz.position.set(this.cabeza.x, 0, this.cabeza.z);
+    raiz.rotation.set(0, Math.atan2(-this.frente.x, -this.frente.z), 0);
+    const alto = Math.min(1.0, Math.max(0.7, this.cabeza.y * 0.58));
+    this.escena.ajustarAltura(alto);
+    raiz.updateWorldMatrix(true, true);
+    // Ancla de WebXR: la oficina queda fija al cuarto real.
+    const cuadro = this.world.xrFrame;
+    const espacio = this.world.xrReferenceSpace;
+    if (cuadro && espacio) {
+      this.ancla.crear(cuadro, espacio, raiz);
+    }
+    this.inicio.visible = false;
+    this.colocarBoton.activo = false;
+    raiz.children.forEach((c) => (c.visible = c !== this.inicio));
+    const sobre = this.escena.sobre;
+    sobre.visible = true;
+    sobre.scale.setScalar(0.02);
+    this.anim.mover(sobre, null, 0.6, { escala: 1 });
+    sonidos.pop();
+    // El gato a su puesto, al fondo del ala izquierda.
+    this.v.set(-0.78, alto, -0.72);
+    this.anim.mover(this.gato.objeto, this.v, 0.8, { arco: 0.15 });
+    this.gato.animar('quieto');
+    if (!this.enXR()) {
+      // Modo prueba: la cámara un poco atrás para ver toda la U.
+      const cam = this.world.camera;
+      cam.position.set(raiz.position.x, alto + 0.68, raiz.position.z + 0.62);
+      cam.lookAt(raiz.position.x, alto - 0.05, raiz.position.z - 0.42);
+    }
+    if (this.fase === 'colocar') {
+      this.fase = 'jornada';
+      this.gato.decir('Listo, oficina en su nuevo lugar.');
+    } else {
+      this.empezarJornada();
+    }
+  }
+
+  // ---- Jornada -------------------------------------------------------
+
+  private limpiarJornada(): void {
+    this.tDia = 0;
+    this.siguienteEvento = 0;
+    this.avisos = [];
+    this.pedidos = [];
+    this.cola = 0;
+    this.tCola = 0;
+    for (const c of this.pila) {
+      c.grupo.removeFromParent();
+    }
+    this.pila = [];
+    if (this.trabajo) {
+      this.trabajo.grupo.removeFromParent();
+    }
+    this.trabajo = null;
+    for (const s of this.sueltos) {
+      this.quitarObjeto(s);
+    }
+    this.sueltos = [];
+    this.actual = null;
+    this.vaciarCajaPedido();
+    this.camion = 'listo';
+    this.escena.camion.visible = true;
+    this.escena.panel.verAvisos();
+    this.escena.resumen.visible = false;
+    this.escena.pregunta.visible = false;
+    this.escena.flecha.visible = false;
+  }
+
+  private empezarJornada(): void {
+    this.limpiarJornada();
+    this.fase = 'jornada';
+    this.cuentas[this.dia] = cuentaNueva();
+    this.cuentas[this.dia].pedidos = JORNADAS[this.dia].eventos.filter((e) => e.tipo === 'pedido').length;
+    if (this.dia > 0) {
+      this.tutorial = false;
+    }
+    this.escena.panel.saltar.activo = this.tutorial;
+    const frases = [
+      'Soy tu guía. Cuando suene la campana, revisa el panel de la izquierda: ahí llegan las donaciones y los pedidos.',
+      '¡Arranca el martes! Hoy llegan más cajas y vienen más cosas dañadas.',
+      'Miércoles: los pedidos llegan con menos tiempo. ¡Atenta a las urgencias!',
+      'Jueves: llueve en varios municipios. Habrá más pedidos urgentes.',
+      'Viernes, el día más duro. ¡Vamos a cerrar bien la semana!',
+    ];
+    this.gato.decir(frases[this.dia], DIAS[this.dia]);
+    this.gato.animar('saludar', 2.5, this.tiempo);
+  }
+
+  private hora(): string {
+    const k = Math.min(1, this.tDia / JORNADAS[this.dia].duracion);
+    const h = 8 + 9 * k;
+    const hh = Math.floor(h);
+    const mm = Math.floor((h - hh) * 60);
+    const h12 = hh > 12 ? hh - 12 : hh;
+    return `${h12}:${String(mm).padStart(2, '0')} ${hh >= 12 ? 'p. m.' : 'a. m.'}`;
+  }
+
+  private avisar(aviso: Omit<Aviso, 'id' | 'estado' | 'hechoEn'>): Aviso {
+    const nuevo: Aviso = { ...aviso, id: ++this.idAviso, estado: 'pendiente', hechoEn: 0 };
+    this.avisos.push(nuevo);
+    sonidos.campana();
+    this.manos.lista.forEach((m) => m.vibrar(0.6, 120));
+    return nuevo;
+  }
+
+  private resolver(aviso: Aviso): void {
+    aviso.estado = 'hecho';
+    aviso.hechoEn = this.tiempo;
+  }
+
+  private dispararEventos(): void {
+    const eventos = JORNADAS[this.dia].eventos;
+    while (this.siguienteEvento < eventos.length && this.tDia >= eventos[this.siguienteEvento].en) {
+      const e = eventos[this.siguienteEvento++];
+      if (e.tipo === 'cajas') {
+        this.avisar({
+          tipo: 'cajas',
+          texto: `Llegaron ${e.cantidad} cajas al centro de acopio`,
+          accion: 'Recibidas',
+          cajas: e.cantidad,
+        });
+        this.pista('recibir', 'Llegaron donaciones. Empuja "Recibidas" en el panel con la punta del índice.', this.puntoPanel());
+      } else {
+        const p: Pedido = {
+          id: this.idAviso + 1,
+          municipio: e.municipio,
+          pide: { ...e.pide },
+          lleva: {},
+          plazo: e.plazo,
+          restante: e.plazo,
+          estado: 'espera',
+          tarde: false,
+          urgente: e.urgente,
+          familias: e.familias,
+        };
+        this.pedidos.push(p);
+        this.avisar({
+          tipo: 'pedido',
+          texto: e.urgente
+            ? `URGENTE · ${e.urgente}: enviar ${textoPedido(p, false)}`
+            : `Pedido: ${e.municipio} necesita ${textoPedido(p, false)}`,
+          accion: 'Aceptar',
+          pedido: p,
+        });
+        if (e.urgente) {
+          this.gato.senalar(this.puntoMundo(this.puntoPanel()), 3, this.tiempo);
+          this.gato.decir(`¡${e.urgente}! Mira la campana: es urgente.`);
+        }
+        this.pista('pedido', '¡Un pedido! Empuja "Aceptar" y elige el municipio. Desde ahí corre su reloj.', this.puntoPanel());
+      }
+    }
+  }
+
+  // ---- Cajas que llegan ---------------------------------------------
+
+  private nuevaCaja(): void {
+    if (this.pila.length >= MAX_PILA) {
+      this.cuenta.perdidas++;
+      sonidos.error();
+      this.escena.panel.avisar('Pila llena: se perdió una caja', this.tiempo);
+      this.gato.decir('¡La pila está llena! Esa caja no cupo y se perdió. Desocupa la mesa más rápido.');
+      return;
+    }
+    const jornada = JORNADAS[this.dia];
+    const [min, max] = jornada.porCaja;
+    const n = min + Math.floor(Math.random() * (max - min + 1));
+    const objetos: CajaD['objetos'] = [];
+    const total = CATEGORIAS.reduce((s, c) => s + PESO_CATEGORIA[c.id], 0);
+    for (let i = 0; i < n; i++) {
+      let r = Math.random() * total;
+      let cat = CATEGORIAS[0].id;
+      for (const c of CATEGORIAS) {
+        r -= PESO_CATEGORIA[c.id];
+        if (r <= 0) {
+          cat = c.id;
+          break;
+        }
+      }
+      objetos.push({ cat, danado: Math.random() < jornada.danados });
+    }
+    // Siempre al menos un objeto dañado por caja desde el martes.
+    if (this.dia > 0 && !objetos.some((o) => o.danado)) {
+      objetos[0].danado = true;
+    }
+    const armada = crearCaja(true);
+    armada.solapas.visible = false;
+    armada.tapa.visible = true;
+    sinContorno(armada.raiz);
+    armada.raiz.scale.setScalar(ESCALA_CAJA);
+    const caja: CajaD = { armada, grupo: armada.raiz, objetos, estado: 'pila', minis: [] };
+    this.escena.sobre.add(caja.grupo);
+    this.pila.push(caja);
+    const destino = this.puestoPila(this.pila.length - 1, this.v);
+    caja.grupo.position.copy(destino).setY(destino.y + 0.3);
+    this.anim.mover(caja.grupo, destino, 0.45);
+    sonidos.soltar();
+    this.registrarCaja(caja);
+    if (!this.trabajo) {
+      this.pista('tomar', 'Cierra la mano sobre una caja de la pila y llévala al centro de la mesa.', PILA[0]);
+    }
+  }
+
+  private puestoPila(i: number, salida: Vector3): Vector3 {
+    const base = PILA[i % 2];
+    return salida.set(base.x, Math.floor(i / 2) * ALTO_CAJA * 1.03, base.z);
+  }
+
+  private reacomodarPila(): void {
+    this.pila.forEach((c, i) => {
+      const p = this.puestoPila(i, this.v);
+      if (c.grupo.position.distanceTo(p) > 0.005) {
+        this.anim.mover(c.grupo, p.clone(), 0.3);
+      }
+    });
+  }
+
+  private registrarCaja(caja: CajaD): void {
+    const ag: Agarrable = {
+      obj: caja.grupo,
+      activo: () =>
+        this.fase === 'jornada' &&
+        caja.estado === 'pila' &&
+        !this.trabajo &&
+        this.pila.indexOf(caja) + 2 >= this.pila.length,
+      tomar: () => {
+        this.pila.splice(this.pila.indexOf(caja), 1);
+        caja.estado = 'mano';
+        this.reacomodarPila();
+        return caja.grupo;
+      },
+      destino: (obj) => (dxz(obj.position, TRABAJO) < 0.2 ? 'valido' : null),
+      soltar: (obj) => {
+        this.quitarAgarrable(ag);
+        if (dxz(obj.position, TRABAJO) < 0.2 && !this.trabajo) {
+          caja.estado = 'trabajo';
+          this.trabajo = caja;
+          this.anim.mover(caja.grupo, TRABAJO.clone(), 0.25);
+          this.pista('abrir', 'Agarra la tapa con la mano cerrada y jálala hacia arriba para abrir la caja.', TRABAJO);
+        } else {
+          caja.estado = 'pila';
+          this.pila.push(caja);
+          this.inter.agarrables.push(ag);
+          this.reacomodarPila();
+        }
+      },
+    };
+    this.inter.agarrables.push(ag);
+  }
+
+  private abrirCaja(caja: CajaD): void {
+    caja.estado = 'abierta';
+    caja.armada.tapa.visible = false;
+    caja.armada.solapas.visible = true;
+    sonidos.pop();
+    this.pintarMinis(caja);
+    this.pista('sacar', 'Mete la mano en la caja, ciérrala y saca un objeto para revisarlo.', TRABAJO);
+  }
+
+  /** Los objetos que se asoman dentro de la caja abierta. */
+  private pintarMinis(caja: CajaD): void {
+    caja.minis.forEach((m) => m.removeFromParent());
+    caja.minis = caja.objetos.slice(0, 4).map((o, i) => {
+      const mini = new Objeto(o.cat, false).grupo;
+      mini.position.set(-0.07 + (i % 2) * 0.12, 0.012, -0.04 + Math.floor(i / 2) * 0.08);
+      mini.scale.setScalar(1.25);
+      caja.grupo.add(mini);
+      return mini;
+    });
+  }
+
+  // ---- Objetos sueltos -----------------------------------------------
+
+  private nuevoObjeto(cat: IdCategoria, danado: boolean, origen: 'caja' | 'repisa'): ObjetoJuego {
+    const o = new Objeto(cat, danado);
+    this.escena.sobre.add(o.grupo);
+    const oj: ObjetoJuego = { o, origen, ag: null as unknown as Agarrable };
+    oj.ag = {
+      obj: o.grupo,
+      activo: () => this.fase === 'jornada' && !o.clasificado,
+      tomar: () => o.grupo,
+      destino: () => this.destinoObjeto(oj),
+      soltar: () => this.soltarObjeto(oj),
+      contornoDe: () => o.contorno,
+      reposo: () => o.reposo(),
+    };
+    this.inter.agarrables.push(oj.ag);
+    this.sueltos.push(oj);
+    return oj;
+  }
+
+  private quitarObjeto(oj: ObjetoJuego): void {
+    this.quitarAgarrable(oj.ag);
+    this.sueltos = this.sueltos.filter((s) => s !== oj);
+    if (this.actual === oj) {
+      this.actual = null;
+    }
+    this.anim.cancelar(oj.o.grupo);
+    oj.o.grupo.removeFromParent();
+  }
+
+  private quitarAgarrable(ag: Agarrable): void {
+    const i = this.inter.agarrables.indexOf(ag);
+    if (i >= 0) {
+      this.inter.agarrables.splice(i, 1);
+    }
+  }
+
+  private registrarAgarrables(): void {
+    const e = this.escena;
+    // La tapa de la caja de trabajo: se jala para abrirla.
+    let tapaInicio = new Vector3();
+    const tapa: Agarrable = {
+      obj: new Group(),
+      activo: () => this.fase === 'jornada' && this.trabajo?.estado === 'trabajo',
+      tomar: () => {
+        const t = this.trabajo!.armada.tapa;
+        e.sobre.attach(t);
+        tapaInicio = t.position.clone();
+        return t;
+      },
+      destino: (obj) => (obj.position.distanceTo(tapaInicio) > 0.05 ? 'valido' : null),
+      soltar: (obj) => {
+        const caja = this.trabajo;
+        if (!caja) {
+          return;
+        }
+        const abrir = obj.position.distanceTo(tapaInicio) > 0.05;
+        caja.grupo.attach(obj);
+        obj.position.set(0, 0, 0);
+        obj.rotation.set(0, 0, 0);
+        obj.scale.setScalar(1);
+        if (abrir) {
+          this.abrirCaja(caja);
+        }
+      },
+    };
+    Object.defineProperty(tapa, 'obj', { get: () => this.trabajo?.armada.tapa ?? e.sobre });
+    this.inter.agarrables.push(tapa);
+
+    // La caja abierta: cada vez que se cierra la mano adentro sale un objeto.
+    const abierta: Agarrable = {
+      obj: new Group(),
+      activo: () => this.fase === 'jornada' && this.trabajo?.estado === 'abierta' && this.trabajo.objetos.length > 0,
+      tomar: (mano) => {
+        const caja = this.trabajo!;
+        const dato = caja.objetos.shift()!;
+        this.pintarMinis(caja);
+        const oj = this.nuevoObjeto(dato.cat, dato.danado, 'caja');
+        oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.palma)));
+        this.actual = oj;
+        this.pista(
+          'clasificar',
+          '¿Está en buen estado? Empuja Sí o No, o llévalo tú: a su fila de la repisa o a la caneca de descarte.',
+          new Vector3(TRABAJO.x, 0.32, TRABAJO.z),
+        );
+        if (dato.danado) {
+          this.pista('danado', 'Ese tiene contorno rojo: está dañado. No se entrega: va a la caneca de descarte.', CANECA);
+        }
+        return oj.o.grupo;
+      },
+      destino: (obj) => this.destinoObjeto(this.deGrupo(obj)),
+      soltar: (obj) => this.soltarObjeto(this.deGrupo(obj)),
+      contornoDe: (obj) => this.deGrupo(obj)?.o.contorno ?? null,
+      reposo: (obj) => {
+        const oj = this.deGrupo(obj);
+        if (oj) {
+          oj.o.reposo();
+        } else {
+          this.inter.contornoDe({ ag: abierta, obj }).poner(null);
+        }
+      },
+    };
+    Object.defineProperty(abierta, 'obj', { get: () => this.trabajo?.grupo ?? e.sobre });
+    this.inter.agarrables.push(abierta);
+
+    // Cada fila de la repisa: se saca el último objeto (−1).
+    CATEGORIAS.forEach((cat, i) => {
+      const zona = e.repisa.zonas[i];
+      const resalte = { poner: (c: string | null) => e.repisa.marcar(i, c) };
+      const fila: Agarrable = {
+        obj: zona,
+        activo: () => this.fase === 'jornada' && e.repisa.cantidades[i] > 0,
+        tomar: (mano) => {
+          const r = e.repisa.quitar(i);
+          if (!r) {
+            return null;
+          }
+          const oj = this.nuevoObjeto(cat.id, r.danado, 'repisa');
+          oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.palma)));
+          return oj.o.grupo;
+        },
+        destino: (obj) => this.destinoObjeto(this.deGrupo(obj)),
+        soltar: (obj) => this.soltarObjeto(this.deGrupo(obj)),
+        contornoDe: (obj) => (obj === zona ? resalte : (this.deGrupo(obj)?.o.contorno ?? null)),
+        reposo: (obj) => (obj === zona ? e.repisa.marcar(i, null) : this.deGrupo(obj)?.o.reposo()),
+      };
+      this.inter.agarrables.push(fila);
+    });
+
+    // La caja del pedido: se lleva al camión.
+    const pedido: Agarrable = {
+      obj: this.cajaPedido.raiz,
+      activo: () => this.fase === 'jornada' && !this.cajaEnCamion && this.camion === 'listo' && !!this.enCurso(),
+      tomar: () => this.cajaPedido.raiz,
+      destino: (obj) => (dxz(obj.position, e.plataforma(this.w)) < 0.16 ? 'valido' : null),
+      soltar: (obj) => {
+        if (dxz(obj.position, e.plataforma(this.w)) < 0.16) {
+          this.cajaEnCamion = true;
+          this.anim.mover(obj, e.plataforma(this.w).clone().setY(this.w.y + 0.005), 0.25, {
+            fin: () => e.camion.attach(obj),
+          });
+          this.pista('despachar', '¡Caja en el camión! Ahora empuja el botón rojo "Despachar".', e.botonDespacho.grupo.position);
+        } else {
+          this.anim.mover(obj, PEDIDO.clone(), 0.3, { arco: 0.05 });
+        }
+      },
+    };
+    this.inter.agarrables.push(pedido);
+  }
+
+  private deGrupo(obj: Object3D): ObjetoJuego {
+    return this.sueltos.find((s) => s.o.grupo === obj)!;
+  }
+
+  /** Mientras se lleva un objeto: ¿dónde se soltaría? */
+  private destinoObjeto(oj: ObjetoJuego | undefined): Destino {
+    if (!oj) {
+      return null;
+    }
+    const e = this.escena;
+    const p = oj.o.grupo.position;
+    let marca = -1;
+    let resultado: Destino = null;
+    if (dxz(p, CANECA) < 0.1 && p.y < 0.28) {
+      resultado = 'valido';
+    } else if (this.sobreCajaPedido(p)) {
+      const ped = this.enCurso();
+      resultado = ped && (ped.pide[oj.o.cat] ?? 0) > (ped.lleva[oj.o.cat] ?? 0) ? 'valido' : 'invalido';
+    } else {
+      const k = e.repisa.categoriaEn(e.repisa.grupo.worldToLocal(e.sobre.localToWorld(this.v.copy(p))));
+      if (k >= 0) {
+        marca = k;
+        resultado = k === indiceCategoria(oj.o.cat) && !e.repisa.lleno(k) ? 'valido' : 'invalido';
+      }
+    }
+    if (marca !== this.zonaMarcada) {
+      if (this.zonaMarcada >= 0) {
+        e.repisa.marcar(this.zonaMarcada, null);
+      }
+      this.zonaMarcada = marca;
+    }
+    if (marca >= 0) {
+      e.repisa.marcar(marca, resultado === 'valido' ? COLOR.verde : COLOR.rojo);
+    }
+    return resultado;
+  }
+
+  private sobreCajaPedido(p: Vector3): boolean {
+    return !this.cajaEnCamion && dxz(p, PEDIDO) < 0.13 && p.y < 0.3;
+  }
+
+  /** Al soltar un objeto: caneca, fila de la repisa, caja del pedido o cae. */
+  private soltarObjeto(oj: ObjetoJuego | undefined): void {
+    if (!oj) {
+      return;
+    }
+    const e = this.escena;
+    if (this.zonaMarcada >= 0) {
+      e.repisa.marcar(this.zonaMarcada, null);
+      this.zonaMarcada = -1;
+    }
+    const p = oj.o.grupo.position;
+    if (dxz(p, CANECA) < 0.1 && p.y < 0.28) {
+      this.aCaneca(oj);
+      return;
+    }
+    if (this.sobreCajaPedido(p)) {
+      this.aPedido(oj);
+      return;
+    }
+    const k = e.repisa.categoriaEn(e.repisa.grupo.worldToLocal(e.sobre.localToWorld(this.v.copy(p))));
+    if (k >= 0) {
+      if (k !== indiceCategoria(oj.o.cat)) {
+        sonidos.error();
+        this.gato.decir(`${nombre(oj.o.cat)} no va en ${CATEGORIAS[k].corto}: va en su propia fila.`);
+        this.devolver(oj);
+      } else {
+        this.aRepisa(oj);
+      }
+      return;
+    }
+    // Ningún puesto: cae a la mesa (o al piso, y vuelve a su sitio).
+    this.inter.caer(oj.o.grupo, () => {
+      if (oj.o.grupo.position.y < -0.05) {
+        this.devolver(oj);
+      }
+    });
+  }
+
+  /** Rebota: lo que salió de la repisa vuelve a ella; lo de la caja, junto a la caja. */
+  private devolver(oj: ObjetoJuego): void {
+    if (oj.origen === 'repisa') {
+      const i = indiceCategoria(oj.o.cat);
+      this.alPuesto(oj, i, () => this.escena.repisa.agregar(i, oj.o.danado));
+    } else {
+      const casa = new Vector3(TRABAJO.x + 0.16, 0, TRABAJO.z + 0.06);
+      this.anim.mover(oj.o.grupo, casa, 0.4, { arco: 0.08 });
+    }
+  }
+
+  /** Anima el objeto hasta el siguiente puesto libre de su fila y lo quita. */
+  private alPuesto(oj: ObjetoJuego, i: number, alFinal: () => void): void {
+    const e = this.escena;
+    oj.o.clasificado = true;
+    this.quitarAgarrable(oj.ag);
+    const k = Math.min(29, e.repisa.cantidades[i]);
+    e.repisa.puesto(i, k, this.w);
+    const destino = e.sobre.worldToLocal(e.repisa.grupo.localToWorld(this.w)).clone();
+    this.anim.mover(oj.o.grupo, destino, 0.3, {
+      escala: ESCALA_REPISA,
+      fin: () => {
+        alFinal();
+        this.quitarObjeto(oj);
+      },
+    });
+  }
+
+  private aRepisa(oj: ObjetoJuego): void {
+    const e = this.escena;
+    const i = indiceCategoria(oj.o.cat);
+    if (e.repisa.lleno(i)) {
+      this.rechazar(oj);
+      return;
+    }
+    if (oj.origen === 'caja') {
+      if (oj.o.danado) {
+        this.cuenta.errores++;
+        this.cuenta.puntos -= 15;
+        this.gato.animar('triste', 2, this.tiempo);
+        this.gato.decir('¡Ojo! Eso estaba dañado y quedó en la repisa. Si sale en un pedido, habrá una queja.');
+      } else {
+        this.cuenta.puntos += 5;
+      }
+    }
+    sonidos.clic();
+    this.alPuesto(oj, i, () => e.repisa.agregar(i, oj.o.danado));
+  }
+
+  private aCaneca(oj: ObjetoJuego): void {
+    oj.o.clasificado = true;
+    this.quitarAgarrable(oj.ag);
+    if (oj.o.danado) {
+      this.cuenta.puntos += 5;
+      sonidos.clic();
+    } else {
+      this.cuenta.errores++;
+      this.cuenta.puntos -= 10;
+      sonidos.error();
+      this.gato.decir(`Eso (${nombre(oj.o.cat).toLowerCase()}) estaba en buen estado. Lo útil no se bota.`);
+    }
+    this.v.set(CANECA.x, 0.03, CANECA.z);
+    this.anim.mover(oj.o.grupo, this.v.clone(), 0.3, { arco: 0.06, escala: 0.4, fin: () => this.quitarObjeto(oj) });
+  }
+
+  /** La fila está llena: la donación no se puede recibir. */
+  private rechazar(oj: ObjetoJuego): void {
+    oj.o.clasificado = true;
+    this.quitarAgarrable(oj.ag);
+    oj.o.contorno.poner(COLOR.rojo);
+    sonidos.error();
+    if (oj.origen === 'caja') {
+      this.cuenta.rechazadas++;
+    }
+    this.escena.panel.avisar(`Categoría llena: no se puede recibir (${nombre(oj.o.cat)})`, this.tiempo);
+    this.gato.decir(`La fila de ${nombre(oj.o.cat).toLowerCase()} ya tiene 30. No se puede recibir: la donación se va.`);
+    this.vistas.add('lleno');
+    const g = oj.o.grupo;
+    this.v.copy(g.position).setY(g.position.y + 0.25);
+    this.anim.mover(g, this.v.clone(), 0.8, { escala: 0.02, fin: () => this.quitarObjeto(oj) });
+  }
+
+  // ---- Pedido: caja, camión y despacho ------------------------------
+
+  private enCurso(): Pedido | undefined {
+    return this.pedidos.find((p) => p.estado === 'curso');
+  }
+
+  private armarCajaPedido(): void {
+    this.cajaPedido = crearCaja(true);
+    this.cajaPedido.solapas.visible = true;
+    this.cajaPedido.tapa.visible = false;
+    sinContorno(this.cajaPedido.raiz);
+    this.cajaPedido.raiz.scale.setScalar(ESCALA_CAJA);
+    this.cajaPedido.raiz.position.copy(PEDIDO);
+    this.escena.sobre.add(this.cajaPedido.raiz);
+    this.baseCamion.copy(this.escena.camion.position);
+  }
+
+  private vaciarCajaPedido(): void {
+    const caja = this.cajaPedido.raiz;
+    this.minisPedido.forEach((m) => m.removeFromParent());
+    this.minisPedido = [];
+    this.escena.sobre.attach(caja);
+    this.anim.cancelar(caja);
+    caja.position.copy(PEDIDO);
+    caja.rotation.set(0, 0, 0);
+    caja.scale.setScalar(ESCALA_CAJA);
+    caja.visible = true;
+    this.cajaEnCamion = false;
+    this.escena.camion.position.copy(this.baseCamion);
+    this.escena.camion.scale.setScalar(0.75);
+  }
+
+  private aPedido(oj: ObjetoJuego): void {
+    const p = this.enCurso();
+    const cat = oj.o.cat;
+    if (!p || (p.pide[cat] ?? 0) <= (p.lleva[cat] ?? 0)) {
+      sonidos.error();
+      this.gato.decir(p ? `El pedido de ${p.municipio} no necesita más ${nombre(cat).toLowerCase()}.` : 'Primero acepta un pedido en el panel.');
+      this.devolver(oj);
+      return;
+    }
+    oj.o.clasificado = true;
+    this.quitarAgarrable(oj.ag);
+    p.lleva[cat] = (p.lleva[cat] ?? 0) + 1;
+    if (oj.o.danado) {
+      (p as Pedido & { quejas?: number }).quejas = ((p as Pedido & { quejas?: number }).quejas ?? 0) + 1;
+    }
+    sonidos.clic();
+    const n = this.minisPedido.length;
+    this.v.set(PEDIDO.x, 0.03, PEDIDO.z);
+    this.anim.mover(oj.o.grupo, this.v.clone(), 0.25, {
+      escala: 0.6,
+      fin: () => {
+        this.quitarObjeto(oj);
+        const mini = new Objeto(cat, oj.o.danado).grupo;
+        mini.children.forEach((c) => {
+          if (c.userData.mirar) {
+            c.visible = false;
+          }
+        });
+        mini.position.set(-0.08 + (n % 4) * 0.055, 0.012 + Math.floor(n / 8) * 0.04, -0.045 + (Math.floor(n / 4) % 2) * 0.08);
+        mini.scale.setScalar(1.1);
+        this.cajaPedido.raiz.add(mini);
+        this.minisPedido.push(mini);
+      },
+    });
+    if (completo(p)) {
+      this.gato.decir(`¡Pedido de ${p.municipio} completo! Lleva la caja al camión y empuja "Despachar".`);
+      this.pista('camion', 'Agarra la caja del pedido y ponla en la plataforma del camión.', this.escena.camion.position);
+    }
+  }
+
+  /** Por qué no se puede despachar todavía (null: sí se puede). */
+  private bloqueoDespacho(): string | null {
+    const p = this.enCurso();
+    if (this.camion !== 'listo') {
+      return 'El camión está en ruta';
+    }
+    if (!p) {
+      return this.pedidos.some((x) => x.estado === 'elegir') ? 'Elige el municipio en el panel' : 'No hay pedido en curso';
+    }
+    const falta = faltantes(p, nombre);
+    if (falta.length) {
+      return `Falta: ${falta.join(', ')}`;
+    }
+    if (!this.cajaEnCamion) {
+      return 'Pon la caja en el camión';
+    }
+    return null;
+  }
+
+  private despachar(): void {
+    const p = this.enCurso();
+    if (!p || this.bloqueoDespacho()) {
+      return;
+    }
+    const c = this.cuenta;
+    const quejas = (p as Pedido & { quejas?: number }).quejas ?? 0;
+    p.estado = 'entregado';
+    c.familias += p.familias;
+    c.quejas += quejas;
+    c.puntos -= quejas * 20;
+    if (p.tarde) {
+      c.tarde++;
+      c.puntos += 40;
+    } else {
+      c.aTiempo++;
+      c.puntos += 100;
+    }
+    const aviso = this.avisos.find((a) => a.pedido === p);
+    if (aviso) {
+      this.resolver(aviso);
+    }
+    const nuevo = this.avisar({
+      tipo: 'entrega',
+      texto: `Entregado ✓ en ${p.municipio}: ${p.familias} familias ayudadas${p.tarde ? ' (tarde)' : ''}`,
+      accion: null,
+    });
+    this.resolver(nuevo);
+    nuevo.hechoEn = this.tiempo + 3;
+    sonidos.camion();
+    this.camion = 'yendo';
+    this.tCamion = 0;
+    this.gato.animar('aplaudir', 2.5, this.tiempo);
+    this.gato.decir(
+      quejas
+        ? `El camión salió, pero llevaba ${quejas} cosa${quejas > 1 ? 's' : ''} dañada${quejas > 1 ? 's' : ''}: habrá una queja.`
+        : p.tarde
+          ? `Llegó tarde a ${p.municipio}, pero llegó. ¡A seguir!`
+          : `¡A tiempo! ${p.municipio} recibe su donación.`,
+    );
+  }
+
+  private moverCamion(dt: number): void {
+    const camion = this.escena.camion;
+    this.tCamion += dt;
+    if (this.camion === 'yendo') {
+      const k = Math.min(1, this.tCamion / 2.4);
+      camion.position.set(this.baseCamion.x, this.baseCamion.y, this.baseCamion.z - 1.1 * k * k);
+      camion.scale.setScalar(0.75 * (1 - 0.85 * k));
+      if (k >= 1) {
+        this.camion = 'fuera';
+        this.tCamion = 0;
+        camion.visible = false;
+      }
+    } else if (this.camion === 'fuera' && this.tCamion > 4) {
+      this.vaciarCajaPedido();
+      camion.visible = true;
+      camion.scale.setScalar(0.02);
+      this.camion = 'volviendo';
+      this.tCamion = 0;
+      this.anim.mover(camion, null, 0.6, { escala: 0.75 });
+      const caja = this.cajaPedido.raiz;
+      caja.scale.setScalar(0.02);
+      this.anim.mover(caja, null, 0.4, { escala: ESCALA_CAJA });
+    } else if (this.camion === 'volviendo' && this.tCamion > 0.7) {
+      this.camion = 'listo';
+    }
+  }
+
+  private avanzarPedidos(dt: number): void {
+    for (const p of this.pedidos) {
+      if (p.estado !== 'curso' && p.estado !== 'elegir') {
+        continue;
+      }
+      const antes = p.restante;
+      p.restante -= dt;
+      if (antes > 0 && p.restante <= 0) {
+        // Se acabó el reloj: pasa a URGENTE y el municipio empeora.
+        p.tarde = true;
+        sonidos.error();
+        this.avisar({
+          tipo: 'alerta',
+          texto: `URGENTE · ${p.municipio} sigue esperando: la situación empeora`,
+          accion: 'Entendido',
+        });
+        this.gato.senalar(this.puntoMundo(this.puntoPanel()), 3, this.tiempo);
+        this.gato.decir(`¡Se acabó el tiempo de ${p.municipio}! Ya llega tarde: despáchalo cuanto antes.`);
+      }
+    }
+  }
+
+  // ---- Botones -------------------------------------------------------
+
+  private conectarBotones(): void {
+    const e = this.escena;
+    const panel = e.panel;
+    panel.alAccion = (aviso) => this.accionAviso(aviso);
+    panel.alMunicipio = (municipio) => {
+      const p = panel.eligiendo;
+      if (!p) {
+        return;
+      }
+      if (municipio !== p.municipio) {
+        sonidos.error();
+        panel.avisar(`Ese pedido es para ${p.municipio}`, this.tiempo);
+        return;
+      }
+      p.estado = 'curso';
+      const aviso = this.avisos.find((x) => x.pedido === p);
+      if (aviso) {
+        aviso.accion = null; // ya tiene destino: solo muestra su reloj
+      }
+      panel.verAvisos();
+      sonidos.logro();
+      this.gato.decir(`Destino: ${p.municipio}. Saca de la repisa ${textoPedido(p, false)} y ponlo en la caja del pedido.`);
+      this.pista('armar', 'Cierra la mano sobre una fila de la repisa para sacar un objeto y suéltalo en la caja del pedido.', PEDIDO);
+    };
+    panel.mover.alPresionar = () => {
+      if (this.fase !== 'jornada') {
+        return;
+      }
+      this.fase = 'colocar';
+      this.inter.soltarTodo();
+      this.ancla.soltar();
+      e.sobre.visible = false;
+      this.mostrarInicio();
+      this.gato.decir('Párate donde quieras la oficina, mira al frente y empuja "Colocar aquí".');
+    };
+    panel.saltar.alPresionar = () => {
+      this.tutorial = false;
+      panel.saltar.activo = false;
+      e.flecha.visible = false;
+      this.gato.decir('Listo, sin tutorial. ¡Tú puedes!');
+    };
+    e.si.alPresionar = () => {
+      const oj = this.actual;
+      if (oj && !oj.o.clasificado) {
+        this.inter.soltarTodo();
+        this.aRepisa(oj);
+      }
+    };
+    e.no.alPresionar = () => {
+      const oj = this.actual;
+      if (oj && !oj.o.clasificado) {
+        this.inter.soltarTodo();
+        this.aCaneca(oj);
+      }
+    };
+    e.botonDespacho.alPresionar = () => this.despachar();
+    e.botonDespacho.alBloqueado = () => {
+      const motivo = this.bloqueoDespacho();
+      if (motivo) {
+        this.gato.decir(`Todavía no se puede despachar. ${motivo}.`);
+      }
+    };
+    e.siguiente.alPresionar = () => {
+      if (this.fase === 'resumen') {
+        if (this.dia < JORNADAS.length - 1) {
+          this.dia++;
+          this.empezarJornada();
+        } else {
+          this.verSemana();
+        }
+      } else if (this.fase === 'semana') {
+        // Jugar de nuevo, sin tutorial.
+        this.dia = 0;
+        this.cuentas = [];
+        this.escena.repisa.fijar(CATEGORIAS.map((c) => INVENTARIO_INICIAL[c.id]));
+        this.gato.objeto.position.set(-0.78, this.escena.alto, -0.72);
+        this.empezarJornada();
+        this.tutorial = false;
+        this.escena.panel.saltar.activo = false;
+      }
+    };
+  }
+
+  private accionAviso(aviso: Aviso): void {
+    const panel = this.escena.panel;
+    if (aviso.tipo === 'cajas') {
+      this.resolver(aviso);
+      this.cola += aviso.cajas ?? 0;
+      this.tCola = 1;
+      return;
+    }
+    if (aviso.tipo === 'alerta') {
+      this.resolver(aviso);
+      return;
+    }
+    const p = aviso.pedido;
+    if (!p) {
+      return;
+    }
+    if (p.estado === 'elegir') {
+      panel.elegirMunicipio(p);
+      return;
+    }
+    const otro = this.pedidos.find((x) => x !== p && (x.estado === 'curso' || x.estado === 'elegir'));
+    if (otro) {
+      sonidos.error();
+      panel.avisar(`Termina primero el pedido de ${otro.municipio}`, this.tiempo);
+      return;
+    }
+    p.estado = 'elegir';
+    p.restante = p.plazo;
+    aviso.accion = 'Elegir destino';
+    panel.elegirMunicipio(p);
+    this.pista('municipio', 'Busca el municipio del pedido en la lista y empújalo con el índice.', this.puntoPanel());
+  }
+
+  // ---- Tutorial ------------------------------------------------------
+
+  private pista(clave: string, texto: string, objetivo: Vector3 | null): void {
+    if (!this.tutorial || this.vistas.has(clave)) {
+      return;
+    }
+    this.vistas.add(clave);
+    this.gato.decir(texto, 'Tutorial');
+    if (objetivo) {
+      this.flechaEn.copy(objetivo);
+      this.flechaHasta = this.tiempo + 14;
+      this.escena.flecha.visible = true;
+    }
+  }
+
+  private puntoPanel(): Vector3 {
+    return this.escena.panel.grupo.position.clone().setY(this.escena.panel.grupo.position.y + 0.04);
+  }
+
+  private puntoMundo(local: Vector3): Vector3 {
+    return this.escena.sobre.localToWorld(local.clone());
+  }
+
+  // ---- Resúmenes -----------------------------------------------------
+
+  private get cuenta(): Cuenta {
+    return (this.cuentas[this.dia] ??= cuentaNueva());
+  }
+
+  private terminarJornada(): void {
+    const c = this.cuenta;
+    for (const p of this.pedidos) {
+      if (p.estado !== 'entregado') {
+        c.sinEntregar++;
+      }
+    }
+    const r = c.pedidos ? c.aTiempo / c.pedidos : 1;
+    c.estrellas = r >= 0.99 && c.errores <= 2 && c.quejas === 0 ? 3 : r >= 0.5 && c.errores <= 5 ? 2 : 1;
+    this.inter.soltarTodo();
+    this.fase = 'resumen';
+    sonidos.fin();
+    this.escena.pregunta.visible = false;
+    this.escena.flecha.visible = false;
+    this.pintarResumenDia();
+    this.escena.resumen.visible = true;
+    this.escena.siguiente.escribir(this.dia < JORNADAS.length - 1 ? 'Siguiente jornada' : 'Resumen de la semana');
+    this.gato.animar('aplaudir', 2.5, this.tiempo);
+    this.gato.decir(`¡Terminó el ${DIAS[this.dia].toLowerCase()}! Mira cómo te fue.`);
+  }
+
+  private estrellas(ctx: CanvasRenderingContext2D, n: number, x: number, y: number, r: number): void {
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i < n ? '#F2B84B' : '#D8D2C8';
+      ctx.beginPath();
+      for (let k = 0; k < 10; k++) {
+        const a = -Math.PI / 2 + (k * Math.PI) / 5;
+        const rr = k % 2 ? r * 0.45 : r;
+        ctx.lineTo(x + i * r * 2.3 + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      }
+      ctx.fill();
+    }
+  }
+
+  private pintarResumenDia(): void {
+    const l = this.escena.lienzoResumen;
+    const { ctx } = l;
+    const c = this.cuenta;
+    fondoPanel(l);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = COLOR.rojo;
+    ctx.font = `900 64px ${FUENTE}`;
+    ctx.fillText(`${DIAS[this.dia]} · Resumen de la jornada`, l.ancho / 2, 92);
+    this.estrellas(ctx, c.estrellas, l.ancho / 2 - 92, 160, 40);
+    const filas: [string, string][] = [
+      ['Pedidos entregados a tiempo', `${c.aTiempo} / ${c.pedidos}`],
+      ['Entregados tarde', String(c.tarde)],
+      ['Sin entregar', String(c.sinEntregar)],
+      ['Donaciones rechazadas (categoría llena)', String(c.rechazadas)],
+      ['Cajas perdidas (pila llena)', String(c.perdidas)],
+      ['Errores de clasificación', String(c.errores)],
+      ['Quejas por objetos dañados', String(c.quejas)],
+      ['Familias ayudadas', String(c.familias)],
+      ['Puntos', String(c.puntos)],
+    ];
+    filas.forEach(([rotulo, valor], i) => {
+      const y = 262 + i * 56;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = COLOR.carbon;
+      ctx.font = `400 38px ${FUENTE}`;
+      ctx.fillText(rotulo, 90, y);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = COLOR.azul;
+      ctx.font = `700 40px ${FUENTE}`;
+      ctx.fillText(valor, l.ancho - 90, y);
+    });
+    l.listo();
+  }
+
+  private verSemana(): void {
+    this.fase = 'semana';
+    const l = this.escena.lienzoResumen;
+    const { ctx } = l;
+    fondoPanel(l);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = COLOR.rojo;
+    ctx.font = `900 66px ${FUENTE}`;
+    ctx.fillText('Resumen de la semana', l.ancho / 2, 90);
+    // Una columna por día: L M M J V.
+    const ancho = (l.ancho - 160) / 5;
+    let familias = 0;
+    let puntos = 0;
+    this.cuentas.forEach((c, i) => {
+      familias += c.familias;
+      puntos += c.puntos;
+      const x = 80 + ancho * i;
+      ctx.fillStyle = i % 2 ? '#F3E9D8' : '#FBF2E2';
+      rect(ctx, x + 6, 125, ancho - 12, 300, 24);
+      ctx.fill();
+      ctx.fillStyle = COLOR.azul;
+      ctx.textAlign = 'center';
+      ctx.font = `900 48px ${FUENTE}`;
+      ctx.fillText(DIAS[i].charAt(0), x + ancho / 2, 185);
+      this.estrellas(ctx, c.estrellas, x + ancho / 2 - 37, 235, 16);
+      ctx.font = `400 28px ${FUENTE}`;
+      ctx.fillStyle = COLOR.carbon;
+      ctx.fillText(`${c.aTiempo}/${c.pedidos} a tiempo`, x + ancho / 2, 300);
+      ctx.fillText(`${c.familias} familias`, x + ancho / 2, 345);
+      ctx.fillText(`${c.puntos} pts`, x + ancho / 2, 390);
+    });
+    ctx.fillStyle = COLOR.verde;
+    ctx.font = `900 50px ${FUENTE}`;
+    ctx.fillText(`${familias} familias ayudadas · ${puntos} puntos`, l.ancho / 2, 500);
+    ctx.fillStyle = COLOR.azul;
+    ctx.font = `400 33px ${FUENTE}`;
+    lineas(ctx, MENSAJE_FINAL, l.ancho - 180).forEach((t, i) => ctx.fillText(t, l.ancho / 2, 570 + i * 44));
+    l.listo();
+    this.escena.siguiente.escribir('Jugar de nuevo');
+    this.escena.resumen.visible = true;
+    sonidos.logro();
+    // El gato al lado del tablero.
+    this.v.set(0.46, this.escena.alto, -0.55);
+    this.anim.mover(this.gato.objeto, this.v.clone(), 0.7, { arco: 0.12 });
+    this.gato.animar('saludar', 4, this.tiempo);
+    this.gato.decir(
+      'Así se gestiona una donación: se recibe, se revisa, se ordena y se despacha a quien la necesita. ¡Gracias por tu semana!',
+      '¡Semana cumplida!',
+    );
+  }
+
+  // ---- Cada cuadro ---------------------------------------------------
+
+  update(delta: number): void {
+    const dt = Math.min(delta, 0.05);
+    this.tiempo += dt;
+    if (this.reinicioEn >= 0 && this.tiempo >= this.reinicioEn) {
+      this.reinicioEn = -1;
+      this.reiniciar();
+    }
+    this.leerCabeza();
+    this.manos.actualizar(this.world.xrSession, this.world.xrFrame, this.world.xrReferenceSpace);
+    const cuadro = this.world.xrFrame;
+    const espacio = this.world.xrReferenceSpace;
+    if (this.ancla.activa && cuadro && espacio) {
+      this.ancla.seguir(cuadro, espacio, this.escena.raiz);
+    }
+
+    if (this.fase === 'jornada') {
+      this.jornada(dt);
+    }
+    this.inter.actualizar(dt);
+    this.anim.actualizar(dt);
+    this.gato.actualizar(this.tiempo, this.cabeza);
+    this.carteles(dt);
+  }
+
+  private jornada(dt: number): void {
+    this.tDia += dt;
+    this.dispararEventos();
+    // Las cajas recibidas llegan de a una.
+    if (this.cola > 0) {
+      this.tCola += dt;
+      if (this.tCola >= 1.6) {
+        this.tCola = 0;
+        this.cola--;
+        this.nuevaCaja();
+      }
+    }
+    // La caja abierta y vacía se va.
+    const t = this.trabajo;
+    if (t && t.estado === 'abierta' && t.objetos.length === 0) {
+      t.estado = 'fin';
+      this.trabajo = null;
+      this.anim.mover(t.grupo, null, 0.35, { escala: 0.02, fin: () => t.grupo.removeFromParent() });
+      if (this.pila.length) {
+        this.pista('tomar', 'Caja vacía. Toma la siguiente de la pila.', PILA[0]);
+      }
+    }
+    this.avanzarPedidos(dt);
+    this.moverCamion(dt);
+    // ¿Terminó la jornada?
+    const eventos = JORNADAS[this.dia].eventos;
+    const sinNada =
+      this.siguienteEvento >= eventos.length &&
+      this.cola === 0 &&
+      this.pila.length === 0 &&
+      !this.trabajo &&
+      this.camion === 'listo' &&
+      this.sueltos.every((s) => s.o.clasificado) &&
+      this.pedidos.every((p) => p.estado === 'entregado') &&
+      this.avisos.every((a) => a.estado === 'hecho');
+    if (this.tDia >= JORNADAS[this.dia].duracion || (sinNada && this.tDia > 20)) {
+      this.terminarJornada();
+    }
+  }
+
+  /** Paneles y letreros (unas 5 veces por segundo) y lo que mira al jugador. */
+  private carteles(dt: number): void {
+    const e = this.escena;
+    if (e.flecha.visible) {
+      e.flecha.position.copy(this.flechaEn).setY(this.flechaEn.y + 0.2 + Math.sin(this.tiempo * 5) * 0.025);
+      if (this.tiempo > this.flechaHasta || !this.tutorial) {
+        e.flecha.visible = false;
+      }
+    }
+    e.pregunta.visible =
+      this.fase === 'jornada' && !!this.actual && !this.actual.o.clasificado && this.actual.origen === 'caja';
+    // Etiquetas de los objetos dañados: miran al jugador.
+    for (const s of this.sueltos) {
+      for (const hijo of s.o.grupo.children) {
+        if (hijo.userData.mirar) {
+          hijo.getWorldPosition(this.v);
+          this.v.set(this.cabeza.x, this.v.y, this.cabeza.z);
+          hijo.lookAt(this.v);
+        }
+      }
+    }
+    if (this.fase !== 'jornada' && this.fase !== 'colocar') {
+      return;
+    }
+    const bloqueo = this.bloqueoDespacho();
+    e.botonDespacho.bloquear(!!bloqueo);
+    this.tPintar -= dt;
+    if (this.tPintar > 0) {
+      return;
+    }
+    this.tPintar = 0.2;
+    const visibles = this.avisos
+      .filter((a) => a.estado === 'pendiente' || this.tiempo - a.hechoEn < 1.6)
+      .sort((a, b) => peso(b) - peso(a) || a.id - b.id);
+    const pendientes = this.avisos.filter((a) => a.estado === 'pendiente').length;
+    e.panel.pintar(visibles, pendientes, DIAS[this.dia], this.hora(), this.tiempo);
+    // Reloj del día.
+    const r = e.reloj;
+    fondoPanel(r, COLOR.azulMarino);
+    r.ctx.fillStyle = COLOR.crema;
+    r.ctx.textAlign = 'center';
+    r.ctx.textBaseline = 'middle';
+    textoAjustado(r.ctx, `${DIAS[this.dia]} · ${this.hora()}`, r.ancho / 2, 64, r.ancho - 60, 66, 900);
+    const k = Math.min(1, this.tDia / JORNADAS[this.dia].duracion);
+    r.ctx.fillStyle = 'rgba(255,248,237,0.25)';
+    rect(r.ctx, 60, 112, r.ancho - 120, 14, 7);
+    r.ctx.fill();
+    r.ctx.fillStyle = COLOR.coral;
+    rect(r.ctx, 60, 112, Math.max(14, (r.ancho - 120) * k), 14, 7);
+    r.ctx.fill();
+    r.listo();
+    // Letrero de la caja del pedido.
+    const p = this.enCurso() ?? this.pedidos.find((x) => x.estado === 'elegir');
+    const lp = e.letreroPedido;
+    fondoPanel(lp, p ? (p.tarde ? '#FCE8E8' : COLOR.amarillo) : COLOR.arena);
+    lp.ctx.fillStyle = p?.tarde ? COLOR.rojoProfundo : COLOR.azul;
+    lp.ctx.textAlign = 'center';
+    lp.ctx.textBaseline = 'middle';
+    if (!p) {
+      textoAjustado(lp.ctx, 'Caja para pedidos', lp.ancho / 2, 78, lp.ancho - 60, 54);
+    } else if (p.estado === 'elegir') {
+      textoAjustado(lp.ctx, `${p.municipio}: elige el destino`, lp.ancho / 2, 56, lp.ancho - 60, 50);
+      textoAjustado(lp.ctx, p.restante > 0 ? reloj(p.restante) : 'TARDE', lp.ancho / 2, 112, lp.ancho - 60, 42);
+    } else {
+      textoAjustado(lp.ctx, `${p.municipio} · ${p.restante > 0 ? reloj(p.restante) : 'TARDE'}`, lp.ancho / 2, 52, lp.ancho - 60, 50);
+      textoAjustado(lp.ctx, textoPedido(p, true), lp.ancho / 2, 112, lp.ancho - 50, 42, 700);
+    }
+    lp.listo();
+    e.letreroPedido.malla.visible = !this.cajaEnCamion;
+    // Letrero del botón de despacho.
+    const ld = e.letreroDespacho;
+    fondoPanel(ld, bloqueo ? COLOR.arena : COLOR.verde);
+    ld.ctx.fillStyle = bloqueo ? COLOR.carbon : '#FFFFFF';
+    ld.ctx.textAlign = 'center';
+    ld.ctx.textBaseline = 'middle';
+    textoAjustado(ld.ctx, bloqueo ?? '¡Listo para despachar!', ld.ancho / 2, 64, ld.ancho - 50, 44);
+    ld.listo();
+  }
+}
+
+/** Orden de los avisos en el panel: el pedido en curso y lo urgente primero. */
+function peso(a: Aviso): number {
+  if (a.estado === 'hecho') {
+    return -1;
+  }
+  const p = a.pedido;
+  if (p && (p.estado === 'curso' || p.estado === 'elegir')) {
+    return 4;
+  }
+  if (a.tipo === 'alerta' || p?.urgente || p?.tarde) {
+    return 3;
+  }
+  return a.tipo === 'cajas' ? 2 : 1;
+}
+
+/** Marca sombras y zonas invisibles para que el contorno no las dibuje. */
+function sinContorno(obj: Object3D): void {
+  obj.traverse((o) => {
+    const m = o as unknown as { isMesh?: boolean; material?: { transparent?: boolean } };
+    if (m.isMesh && m.material?.transparent) {
+      o.userData.sinContorno = true;
+    }
+  });
+}

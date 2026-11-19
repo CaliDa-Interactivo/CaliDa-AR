@@ -17,7 +17,27 @@ y pensada **solo para gafas Meta Quest**. Es un proyecto aparte de la página in
    - Si los recursos no alcanzan → vuelve a la selección para completar la donación.
 8. El gato cierra la experiencia.
 
-## Guion "Cali en tu mesa" (experiencia principal)
+## CaliDa RA · Centro de acopio (experiencia principal, desde el 18 nov 2026)
+
+Juego de gestión con presión de tiempo: la persona maneja un centro de acopio de la Cruz Roja en
+Cali durante una semana (lunes a viernes, cada día más difícil). La oficina se arma en U a su
+alrededor: izquierda, el panel de avisos; frente, la repisa de 6 categorías (tope de 30 cada una),
+la pila de cajas, la zona de trabajo, la caja del pedido y la caneca de descarte; derecha, el camión
+y el botón "Despachar".
+
+- **Manos sin pellizco:** se agarra cerrando la mano (puño) y los botones se empujan con la punta
+  del índice. Los rayos y el pellizco de IWSDK se apagan. Con controles: gatillo lateral para
+  agarrar. En el computador (`?prueba`): arrastrar y hacer clic con el mouse.
+- **Flujo:** llegan cajas → abrir con la tapa → revisar cada objeto (contorno rojo = dañado) →
+  a su fila o a la caneca → llega un pedido con reloj → elegir el municipio del Valle del Cauca →
+  armar la caja desde la repisa → al camión → botón. Resumen diario con estrellas y resumen de la semana.
+- **Código:** `src/oficina/` (`juego.ts` es el sistema; `escena.ts`, `repisa.ts`, `panel.ts`,
+  `interaccion.ts`, `manos.ts`, `objetos.ts`, `datos.ts` con las jornadas y municipios).
+- **Pendiente:** modo multijugador (receptor y despachador).
+
+Otros recorridos que se conservan: `?guion` ("Cali en tu mesa") y `?anterior` (donante → beneficiario).
+
+## Guion "Cali en tu mesa" (se abre con ?guion)
 
 La persona **es un centro de acopio** durante una semana (un lote). En la mesa aparecen dos cosas
 separadas: su puesto (estantería de madera "CA" y el panel con las opciones para gestionar las

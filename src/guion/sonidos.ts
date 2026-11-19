@@ -53,6 +53,21 @@ export const sonidos = {
     nota(1760, 1740, 0.4, 'sine', 0.1, 0.12);
   },
   error: () => nota(220, 140, 0.22, 'sawtooth', 0.1),
+  // Oficina del centro de acopio.
+  agarrar: () => nota(260, 340, 0.08, 'sine', 0.14),
+  soltar: () => nota(300, 180, 0.09, 'sine', 0.12),
+  boton: () => nota(700, 520, 0.06, 'square', 0.07),
+  bloqueado: () => nota(180, 150, 0.16, 'square', 0.08),
+  camion: () => {
+    nota(70, 95, 0.5, 'sawtooth', 0.07);
+    nota(95, 140, 0.9, 'sawtooth', 0.06, 0.45);
+  },
+  fin: () => {
+    nota(523, 523, 0.14, 'triangle', 0.15);
+    nota(659, 659, 0.14, 'triangle', 0.15, 0.13);
+    nota(784, 784, 0.14, 'triangle', 0.15, 0.26);
+    nota(1046, 1046, 0.34, 'triangle', 0.15, 0.39);
+  },
   logro: () => {
     nota(523, 523, 0.12, 'sine', 0.16);
     nota(659, 659, 0.12, 'sine', 0.16, 0.11);

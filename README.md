@@ -21,14 +21,17 @@ y pensada **solo para gafas Meta Quest**. Es un proyecto aparte de la página in
 
 Juego de gestión con presión de tiempo: la persona maneja un centro de acopio de la Cruz Roja en
 Cali durante una semana (lunes a viernes, cada día más difícil). La oficina se arma en U a su
-alrededor: izquierda, el panel de avisos; frente, la repisa de 6 categorías (tope de 30 cada una),
+alrededor: izquierda, el panel de avisos; frente, la estantería de 5 categorías (tope de 30 cada una),
 la pila de cajas, la zona de trabajo, la caja del pedido y la caneca de descarte; derecha, el camión
 y el botón "Despachar".
 
-- **Estética de la página:** la estantería es `estanteria.glb` de la página con sus placas (borde
-  de madera, crema, clavos, Roboto 700, contador `n/30` y punto de estado); los productos son los
-  modelos de la página simplificados (`public/models/ra/`); los botones son píldoras 3D con los
-  colores del administrador (principal azul #1F5490, secundario crema, peligro rojo).
+- **Estantería de la página, completa:** `estanteria.glb` con las 5 categorías de la página
+  (Alimento, Aseo, Ropa, Medicamentos, Construcción) y sus 16 productos, con los mismos nombres,
+  modelos, colores y calcomanías (`public/models/ra/`, simplificados). Cada producto tiene su columna
+  y su etiqueta clavada al frente de la tabla de abajo; la placa de la categoría (con `n/30` y el
+  punto de estado) cuelga al frente, arriba del compartimiento. Los objetos se acomodan como en
+  bodega: primero la fila de adelante y después las de atrás. El gato va encima de la estantería
+  con el reloj digital a sus pies. Botones: píldoras 3D con los colores del administrador.
 - **Ergonomía (calibración de pie al colocar):** estatura ≈ altura de los ojos / 0,93. Mesa a la
   altura del codo (0,63 × estatura) menos 7,5 cm; la estantería se achica si hace falta para que
   sus filas queden entre la cadera y los hombros (nunca sobre los ojos); paneles a 70 cm con el

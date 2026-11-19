@@ -40,6 +40,7 @@ import {
   type Evento,
   MENSAJE_FINAL,
   PESO_CATEGORIA,
+  subAlAzar,
   indiceCategoria,
   type IdCategoria,
 } from './datos.js';
@@ -47,6 +48,7 @@ import {
   ALTO_CAJA,
   CANECA,
   ESCALA_CAJA,
+  ESCALA_GATO,
   Escena,
   PEDIDO,
   PILA,
@@ -60,7 +62,6 @@ import { completo, cuentaNueva, estrellasDe, faltantes, type Aviso, type Cuenta,
 export { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
 import { Objeto } from './objetos.js';
 import { reloj, textoPedido } from './panel.js';
-import { ESCALA_REPISA } from './repisa.js';
 import { BOTON, Boton3D, FUENTE, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
 
 export type Fase = 'inicio' | 'colocar' | 'espera' | 'jornada' | 'resumen' | 'semana';
@@ -68,7 +69,8 @@ export type Fase = 'inicio' | 'colocar' | 'espera' | 'jornada' | 'resumen' | 'se
 export interface CajaD {
   armada: CajaArmada;
   grupo: Group;
-  objetos: { cat: IdCategoria; danado: boolean }[];
+  /** `sub`: qué producto de la categoría es (índice en `subs`). */
+  objetos: { cat: IdCategoria; danado: boolean; sub?: number }[];
   estado: 'pila' | 'mano' | 'trabajo' | 'abierta' | 'fin';
   minis: Group[];
 }
@@ -322,9 +324,9 @@ export class OficinaSystem extends createSystem({}) {
     sobre.scale.setScalar(0.02);
     this.anim.mover(sobre, null, 0.6, { escala: 1 });
     sonidos.pop();
-    // El gato a su puesto, entre la estantería y el panel.
+    // El gato sube a la estantería, con el reloj a sus pies.
     this.escena.puestoGato(this.v);
-    this.anim.mover(this.gato.objeto, this.v, 0.8, { arco: 0.15 });
+    this.anim.mover(this.gato.objeto, this.v, 0.8, { arco: 0.15, escala: ESCALA_GATO });
     this.gato.animar('quieto');
     if (!this.enXR()) {
       // Modo prueba: la cámara un poco atrás para ver toda la U.
@@ -344,7 +346,7 @@ export class OficinaSystem extends createSystem({}) {
   protected recalibrar(): void {
     this.leerCabeza();
     this.escena.ajustarErgonomia(this.cabeza.y - this.escena.raiz.position.y);
-    this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.5, { arco: 0.08 });
+    this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.5, { arco: 0.08, escala: ESCALA_GATO });
     sonidos.pop();
     this.gato.decir('Listo: ajusté la mesa, la estantería y los paneles a tu estatura. Si no estabas de pie, párate derecho y vuelve a empujarlo.', 'Altura');
   }
@@ -508,7 +510,7 @@ export class OficinaSystem extends createSystem({}) {
           break;
         }
       }
-      objetos.push({ cat, danado: Math.random() < jornada.danados });
+      objetos.push({ cat, danado: Math.random() < jornada.danados, sub: subAlAzar(cat) });
     }
     // Siempre al menos un objeto dañado por caja desde el martes.
     if (this.dia > 0 && !objetos.some((o) => o.danado)) {
@@ -596,7 +598,7 @@ export class OficinaSystem extends createSystem({}) {
   protected pintarMinis(caja: CajaD): void {
     caja.minis.forEach((m) => m.removeFromParent());
     caja.minis = caja.objetos.slice(0, 4).map((o, i) => {
-      const mini = new Objeto(o.cat, false).grupo;
+      const mini = new Objeto(o.cat, false, o.sub).grupo;
       mini.position.set(-0.07 + (i % 2) * 0.12, 0.012, -0.04 + Math.floor(i / 2) * 0.08);
       mini.scale.setScalar(1.25);
       caja.grupo.add(mini);
@@ -606,8 +608,8 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Objetos sueltos -----------------------------------------------
 
-  protected nuevoObjeto(cat: IdCategoria, danado: boolean, origen: 'caja' | 'repisa'): ObjetoJuego {
-    const o = new Objeto(cat, danado);
+  protected nuevoObjeto(cat: IdCategoria, danado: boolean, origen: 'caja' | 'repisa', sub?: number): ObjetoJuego {
+    const o = new Objeto(cat, danado, sub);
     this.escena.sobre.add(o.grupo);
     const oj: ObjetoJuego = { o, origen, ag: null as unknown as Agarrable };
     oj.ag = {
@@ -682,7 +684,7 @@ export class OficinaSystem extends createSystem({}) {
         const caja = this.trabajo!;
         const dato = caja.objetos.shift()!;
         this.pintarMinis(caja);
-        const oj = this.nuevoObjeto(dato.cat, dato.danado, 'caja');
+        const oj = this.nuevoObjeto(dato.cat, dato.danado, 'caja', dato.sub);
         oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.palma)));
         this.actual = oj;
         this.explicarManual();
@@ -714,11 +716,13 @@ export class OficinaSystem extends createSystem({}) {
         obj: zona,
         activo: () => this.fase === 'jornada' && e.repisa.cantidades[i] > 0,
         tomar: (mano) => {
-          const r = this.repisaQuitar(i);
+          // Del producto (columna) donde está la mano.
+          const sub = e.repisa.productoEn(i, e.repisa.grupo.worldToLocal(this.w.copy(mano.palma)));
+          const r = this.repisaQuitar(i, sub);
           if (!r) {
             return null;
           }
-          const oj = this.nuevoObjeto(cat.id, r.danado, 'repisa');
+          const oj = this.nuevoObjeto(cat.id, r.danado, 'repisa', r.sub);
           oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.palma)));
           return oj.o.grupo;
         },
@@ -834,7 +838,7 @@ export class OficinaSystem extends createSystem({}) {
   protected devolver(oj: ObjetoJuego): void {
     if (oj.origen === 'repisa') {
       const i = indiceCategoria(oj.o.cat);
-      this.alPuesto(oj, i, () => this.repisaAgregar(i, oj.o.danado));
+      this.alPuesto(oj, i, () => this.repisaAgregar(i, oj.o.danado, oj.o.sub));
     } else {
       const casa = new Vector3(TRABAJO.x + 0.16, 0, TRABAJO.z + 0.06);
       this.anim.mover(oj.o.grupo, casa, 0.4, { arco: 0.08 });
@@ -846,11 +850,11 @@ export class OficinaSystem extends createSystem({}) {
     const e = this.escena;
     oj.o.clasificado = true;
     this.quitarAgarrable(oj.ag);
-    const k = Math.min(29, e.repisa.cantidades[i]);
-    e.repisa.puesto(i, k, this.w);
+    e.repisa.siguientePuesto(i, oj.o.sub, this.w);
     const destino = e.sobre.worldToLocal(e.repisa.grupo.localToWorld(this.w)).clone();
+    oj.o.grupo.rotation.set(0, 0, 0);
     this.anim.mover(oj.o.grupo, destino, 0.3, {
-      escala: ESCALA_REPISA * e.repisa.grupo.scale.x,
+      escala: e.repisa.escalaDe(i, oj.o.sub) * e.repisa.grupo.scale.x,
       fin: () => {
         alFinal();
         this.quitarObjeto(oj);
@@ -859,12 +863,12 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   /** Pone un objeto en su fila (en multijugador, también en la del compañero). */
-  protected repisaAgregar(i: number, danado: boolean): boolean {
-    return this.escena.repisa.agregar(i, danado);
+  protected repisaAgregar(i: number, danado: boolean, sub = -1): boolean {
+    return this.escena.repisa.agregar(i, danado, sub);
   }
 
-  protected repisaQuitar(i: number): { danado: boolean } | null {
-    return this.escena.repisa.quitar(i);
+  protected repisaQuitar(i: number, sub = -1): { danado: boolean; sub: number } | null {
+    return this.escena.repisa.quitar(i, sub);
   }
 
   /** ¿La fila está llena? */
@@ -890,7 +894,7 @@ export class OficinaSystem extends createSystem({}) {
       }
     }
     sonidos.acierto();
-    this.alPuesto(oj, i, () => this.repisaAgregar(i, oj.o.danado));
+    this.alPuesto(oj, i, () => this.repisaAgregar(i, oj.o.danado, oj.o.sub));
   }
 
   protected aCaneca(oj: ObjetoJuego): void {
@@ -1387,7 +1391,7 @@ export class OficinaSystem extends createSystem({}) {
     this.escena.resumen.visible = true;
     sonidos.logro();
     // El gato se queda en su puesto, a un lado del tablero.
-    this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.7, { arco: 0.12 });
+    this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.7, { arco: 0.12, escala: ESCALA_GATO });
     this.gato.animar('saludar', 4, this.tiempo);
     this.gato.decir(
       'Así se gestiona una donación: se recibe, se revisa, se ordena y se despacha a quien la necesita. ¡Gracias por tu semana!',

@@ -1,9 +1,9 @@
 // ============================================================
-// objetos.ts — los objetos donados, low-poly y reconocibles:
-// lata, botella, camiseta doblada, cobija enrollada, jabón y
-// paquete de pañales. Cada uno es una lista de "partes"
-// (geometría + material + posición), para dibujarlos sueltos o en
-// bloque en la repisa (InstancedMesh).
+// objetos.ts — los objetos donados: los 16 productos de la
+// estantería de la página (sus mismos modelos, colores y
+// calcomanías de js/ajustes-modelos.js). Cada uno es una lista de
+// "partes" (geometría + material + posición), para dibujarlos
+// sueltos o en bloque en la estantería (InstancedMesh).
 // Los dañados llevan su señal (fecha vencida, tapa abierta,
 // agujero, empaque arrugado), contorno rojo y una etiqueta.
 // ============================================================
@@ -12,22 +12,23 @@ import {
   BackSide,
   Box3,
   BoxGeometry,
+  CanvasTexture,
   Color,
   BufferGeometry,
   CircleGeometry,
-  CylinderGeometry,
   Group,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
-  Quaternion,
+  PlaneGeometry,
   SphereGeometry,
+  SRGBColorSpace,
   Vector3,
   type Material,
 } from '@iwsdk/core';
-import { CATEGORIAS, COLOR, type IdCategoria } from './datos.js';
+import { CATEGORIAS, COLOR, categoriaDe, type IdCategoria, type Producto } from './datos.js';
 import { Etiqueta } from '../texto.js';
 
 export interface Parte {
@@ -37,37 +38,103 @@ export interface Parte {
 }
 
 const mate = (color: string) => new MeshStandardMaterial({ color, roughness: 0.85, metalness: 0 });
-const m4 = (x: number, y: number, z: number, rz = 0, rx = 0): Matrix4 =>
-  new Matrix4().compose(
-    new Vector3(x, y, z),
-    new Quaternion().setFromAxisAngle(new Vector3(rz ? 0 : 1, 0, rz ? 1 : 0), rz || rx),
-    new Vector3(1, 1, 1),
-  );
 
-let cache: Record<IdCategoria, Parte[]> | null = null;
-
-/** Modelos de la página (los mismos de su estantería) para cada categoría. */
-const MODELO_PAGINA: Partial<Record<IdCategoria, string>> = {
-  alimentos: 'ra_lata',
-  agua: 'ra_agua',
-  ropa: 'ra_camisa',
-  higiene: 'ra_papel',
+/** Colores que la página corrige en sus modelos (COLORES de js/ajustes-modelos.js). */
+const COLORES: Record<string, Record<string, string>> = {
+  'ropa-mujer': { fabric: '#F6B9CC', 'Material.002': '#EE93B3', 'Material.001': '#86B5A9', metal: '#FFF8ED' },
+  'ropa-ninos': { Tela_Azul: '#5E86BF', 'azul mas ocuro ': '#4A6FA5', Metal: '#E8E1D5' },
+  'alimento-agua': { 'Bottle plastic': '#8FD0F2', 'Bottle cap': '#1E6FD9' },
 };
 
-/** Colores que la página corrige en sus modelos (js/ajustes-modelos.js). */
-const AJUSTES: Record<string, string> = {
-  'Bottle plastic': '#8FD0F2',
-  'Bottle cap': '#1E6FD9',
+// ---- Calcomanías de la página (maíz en la lata, huella en la bolsa) ----
+
+function dibujarMaiz(ctx: CanvasRenderingContext2D, s: number): void {
+  ctx.save();
+  ctx.translate(s / 2, s / 2);
+  ctx.rotate(-0.35);
+  ctx.fillStyle = '#4CAF50';
+  ctx.beginPath();
+  ctx.moveTo(0, s * 0.42);
+  ctx.quadraticCurveTo(-s * 0.36, s * 0.05, -s * 0.12, -s * 0.3);
+  ctx.quadraticCurveTo(-s * 0.08, s * 0.1, 0, s * 0.42);
+  ctx.fill();
+  ctx.fillStyle = '#3E9B43';
+  ctx.beginPath();
+  ctx.moveTo(0, s * 0.42);
+  ctx.quadraticCurveTo(s * 0.36, s * 0.05, s * 0.12, -s * 0.3);
+  ctx.quadraticCurveTo(s * 0.08, s * 0.1, 0, s * 0.42);
+  ctx.fill();
+  ctx.fillStyle = '#FFC93C';
+  ctx.beginPath();
+  ctx.ellipse(0, -s * 0.05, s * 0.13, s * 0.33, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#F2A81D';
+  for (let y = -0.3; y <= 0.2; y += 0.085) {
+    for (let x = -0.07; x <= 0.07; x += 0.07) {
+      ctx.beginPath();
+      ctx.arc(x * s, (y - 0.02) * s, s * 0.022, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function dibujarHuella(ctx: CanvasRenderingContext2D, s: number): void {
+  ctx.fillStyle = '#FFF6E6';
+  ctx.beginPath();
+  ctx.arc(s / 2, s / 2, s * 0.46, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#6B3A1E';
+  ctx.beginPath();
+  ctx.ellipse(s * 0.5, s * 0.6, s * 0.15, s * 0.13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  for (const [x, y, r] of [
+    [0.3, 0.42, -0.4],
+    [0.42, 0.3, -0.15],
+    [0.58, 0.3, 0.15],
+    [0.7, 0.42, 0.4],
+  ]) {
+    ctx.beginPath();
+    ctx.ellipse(s * x, s * y, s * 0.06, s * 0.08, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+const CALCOMANIAS: Record<string, (ctx: CanvasRenderingContext2D, s: number) => void> = {
+  'alimento-no-perecederos': dibujarMaiz,
+  'alimento-animal': dibujarHuella,
 };
+
+function calcomania(sub: string, caja: Box3): Parte | null {
+  const dibujar = CALCOMANIAS[sub];
+  if (!dibujar) {
+    return null;
+  }
+  const lienzo = document.createElement('canvas');
+  lienzo.width = lienzo.height = 256;
+  dibujar(lienzo.getContext('2d') as CanvasRenderingContext2D, 256);
+  const textura = new CanvasTexture(lienzo);
+  textura.colorSpace = SRGBColorSpace;
+  const tam = caja.getSize(new Vector3());
+  const lado = Math.min(tam.x, tam.y) * 0.5;
+  const centro = caja.getCenter(new Vector3());
+  return {
+    geometria: new PlaneGeometry(lado, lado),
+    material: new MeshBasicMaterial({ map: textura, transparent: true, depthWrite: false }),
+    matriz: new Matrix4().makeTranslation(centro.x, centro.y, caja.max.z + tam.z * 0.01),
+  };
+}
 
 /**
- * Partes de un modelo .glb de la página: cada malla con su material mate,
- * escalada a una caja de ancho × alto y apoyada en y = 0.
+ * Partes de un producto de la página: cada malla con su material mate,
+ * escalada a una caja de ancho × alto y apoyada en y = 0 (centrada en x/z).
  */
-function partesDeModelo(id: string, ancho: number, alto: number): Parte[] | null {
-  const gltf = AssetManager.getGLTF(id);
+function partesDeModelo(p: Producto): Parte[] {
+  const gltf = AssetManager.getGLTF(p.modelo);
+  const [ancho, alto] = p.medida;
   if (!gltf) {
-    return null;
+    // Sin el modelo: una cajita del tamaño del producto.
+    return [{ geometria: new BoxGeometry(ancho, alto, ancho), material: mate('#C98F62'), matriz: new Matrix4().makeTranslation(0, alto / 2, 0) }];
   }
   const raiz = gltf.scene;
   raiz.updateMatrixWorld(true);
@@ -75,11 +142,12 @@ function partesDeModelo(id: string, ancho: number, alto: number): Parte[] | null
   const tam = caja.getSize(new Vector3());
   const escala = Math.min(ancho / tam.x, alto / tam.y, ancho / tam.z);
   const centro = caja.getCenter(new Vector3());
-  // Mueve el modelo a su lugar: centrado en x/z, base en y = 0.
   const ajuste = new Matrix4()
     .makeScale(escala, escala, escala)
     .multiply(new Matrix4().makeTranslation(-centro.x, -caja.min.y, -centro.z));
+  const colores = COLORES[p.id] ?? {};
   const partes: Parte[] = [];
+  const final = new Box3();
   raiz.traverse((o) => {
     const m = o as Mesh;
     if (!m.isMesh) {
@@ -87,72 +155,55 @@ function partesDeModelo(id: string, ancho: number, alto: number): Parte[] | null
     }
     const geometria = m.geometry.clone().applyMatrix4(new Matrix4().multiplyMatrices(ajuste, m.matrixWorld));
     const original = m.material as MeshStandardMaterial;
-    const material = mate(AJUSTES[original.name] ?? `#${(original.color ?? new Color('#cccccc')).getHexString()}`);
+    // El cepillo de dientes se gira para que se vean los dos (como la página).
+    if (p.id === 'aseo-bucal' && original.map) {
+      geometria.computeBoundingBox();
+      const c = geometria.boundingBox!.getCenter(new Vector3());
+      geometria.translate(-c.x, -c.y, -c.z).rotateZ(Math.PI / 2).translate(c.x, c.y, c.z);
+    }
+    const material = mate(colores[original.name] ?? `#${(original.color ?? new Color('#cccccc')).getHexString()}`);
     material.name = original.name;
     if (original.map) {
       material.map = original.map;
     }
+    geometria.computeBoundingBox();
+    final.union(geometria.boundingBox!);
     partes.push({ geometria, material, matriz: new Matrix4() });
   });
+  const calco = calcomania(p.id, final);
+  if (calco) {
+    partes.push(calco);
+  }
   return partes;
 }
 
-/** Partes de un objeto de cada categoría (base en y = 0, unos 5-6 cm). */
-export function partesDe(cat: IdCategoria): Parte[] {
-  if (!cache) {
-    cache = {
-      alimentos: [
-        { geometria: new CylinderGeometry(0.022, 0.022, 0.05, 14), material: mate('#C9C2B8'), matriz: m4(0, 0.025, 0) },
-        { geometria: new CylinderGeometry(0.0226, 0.0226, 0.03, 14), material: mate(COLOR.coral), matriz: m4(0, 0.025, 0) },
-        { geometria: new CylinderGeometry(0.019, 0.019, 0.003, 14), material: mate('#E6E1D8'), matriz: m4(0, 0.0505, 0) },
-      ],
-      agua: [
-        { geometria: new CylinderGeometry(0.016, 0.018, 0.055, 12), material: mate('#8FD0F2'), matriz: m4(0, 0.0275, 0) },
-        { geometria: new CylinderGeometry(0.008, 0.015, 0.012, 12), material: mate('#8FD0F2'), matriz: m4(0, 0.061, 0) },
-        { geometria: new CylinderGeometry(0.0185, 0.0185, 0.018, 12), material: mate(COLOR.crema), matriz: m4(0, 0.03, 0) },
-        { geometria: new CylinderGeometry(0.0085, 0.0085, 0.008, 10), material: mate('#1E6FD9'), matriz: m4(0, 0.071, 0) },
-      ],
-      ropa: [
-        { geometria: new BoxGeometry(0.056, 0.016, 0.046), material: mate('#5E86BF'), matriz: m4(0, 0.008, 0) },
-        { geometria: new BoxGeometry(0.022, 0.005, 0.01), material: mate('#3F5F8F'), matriz: m4(0, 0.018, -0.016) },
-        { geometria: new BoxGeometry(0.057, 0.002, 0.003), material: mate('#3F5F8F'), matriz: m4(0, 0.0165, 0.006) },
-      ],
-      cobijas: [
-        { geometria: new CylinderGeometry(0.021, 0.021, 0.06, 14), material: mate('#E58C6F'), matriz: m4(0, 0.021, 0, Math.PI / 2) },
-        { geometria: new CylinderGeometry(0.0215, 0.0215, 0.008, 14), material: mate(COLOR.crema), matriz: m4(-0.018, 0.021, 0, Math.PI / 2) },
-        { geometria: new CylinderGeometry(0.0215, 0.0215, 0.008, 14), material: mate(COLOR.crema), matriz: m4(0.018, 0.021, 0, Math.PI / 2) },
-      ],
-      higiene: [
-        { geometria: new BoxGeometry(0.048, 0.02, 0.032), material: mate('#F6B9CC'), matriz: m4(0, 0.01, 0) },
-        { geometria: new BoxGeometry(0.03, 0.002, 0.02), material: mate(COLOR.crema), matriz: m4(0, 0.0205, 0) },
-      ],
-      panales: [
-        { geometria: new BoxGeometry(0.044, 0.054, 0.032), material: mate('#BFE0F2'), matriz: m4(0, 0.027, 0) },
-        { geometria: new BoxGeometry(0.0445, 0.014, 0.0325), material: mate(COLOR.crema), matriz: m4(0, 0.032, 0) },
-        { geometria: new SphereGeometry(0.006, 8, 6), material: mate('#F2B84B'), matriz: m4(0, 0.032, 0.017) },
-      ],
-    };
-    // Las categorías que existen en la página usan su modelo.
-    const medidas: Record<string, [number, number]> = {
-      alimentos: [0.045, 0.055],
-      agua: [0.04, 0.075],
-      ropa: [0.06, 0.04],
-      higiene: [0.045, 0.05],
-    };
-    for (const [c, id] of Object.entries(MODELO_PAGINA) as [IdCategoria, string][]) {
-      const partes = partesDeModelo(id, ...medidas[c]);
-      if (partes?.length) {
-        cache[c] = partes;
-      }
-    }
+const cache = new Map<string, Parte[]>();
+
+/** Partes del producto `sub` (índice) de la categoría (base en y = 0). */
+export function partesDe(cat: IdCategoria, sub: number): Parte[] {
+  const p = categoriaDe(cat).subs[sub] ?? categoriaDe(cat).subs[0];
+  let partes = cache.get(p.id);
+  if (!partes) {
+    partes = partesDeModelo(p);
+    cache.set(p.id, partes);
   }
-  return cache[cat];
+  return partes;
+}
+
+/** Tamaño (caja) de un producto armado. */
+export function tamDe(cat: IdCategoria, sub: number): Vector3 {
+  const caja = new Box3();
+  for (const parte of partesDe(cat, sub)) {
+    parte.geometria.computeBoundingBox();
+    caja.union(parte.geometria.boundingBox!.clone().applyMatrix4(parte.matriz));
+  }
+  return caja.getSize(new Vector3());
 }
 
 /** Arma el objeto suelto (Group) a partir de sus partes. */
-function armar(cat: IdCategoria): Group {
+function armar(cat: IdCategoria, sub: number): Group {
   const g = new Group();
-  for (const p of partesDe(cat)) {
+  for (const p of partesDe(cat, sub)) {
     const malla = new Mesh(p.geometria, p.material);
     malla.applyMatrix4(p.matriz);
     g.add(malla);
@@ -163,17 +214,12 @@ function armar(cat: IdCategoria): Group {
 const negro = mate('#3A2A22');
 const hueco = new MeshBasicMaterial({ color: '#2B1A12' });
 
-/** Señal visible del daño, según la categoría (ubicada según el tamaño real). */
-function senalDano(cat: IdCategoria, g: Group): void {
+/** Señal visible del daño, según el producto (ubicada según el tamaño real). */
+function senalDano(cat: IdCategoria, sub: string, g: Group): void {
   const caja = new Box3().setFromObject(g, true);
   const arriba = caja.max.y;
   const frente = caja.max.z;
-  if (cat === 'alimentos') {
-    // Etiqueta de fecha vencida en el frente.
-    const fecha = new Mesh(new BoxGeometry(0.02, 0.011, 0.002), negro);
-    fecha.position.set(0, arriba * 0.75, frente + 0.001);
-    g.add(fecha);
-  } else if (cat === 'agua') {
+  if (sub === 'alimento-agua') {
     // Sin tapa (abierta) y un charquito que se sale.
     g.traverse((o) => {
       const m = o as Mesh;
@@ -185,15 +231,19 @@ function senalDano(cat: IdCategoria, g: Group): void {
     gota.position.set(0.022, 0.003, 0.012);
     gota.scale.set(1.8, 0.35, 1.8);
     g.add(gota);
-  } else if (cat === 'ropa' || cat === 'cobijas') {
-    // Agujero o rasgadura encima.
+  } else if (cat === 'alimento' || cat === 'medicamentos') {
+    // Etiqueta de fecha vencida en el frente.
+    const fecha = new Mesh(new BoxGeometry(0.02, 0.011, 0.002), negro);
+    fecha.position.set(0, arriba * 0.6, frente + 0.001);
+    g.add(fecha);
+  } else if (cat === 'ropa') {
+    // Agujero o rasgadura en el frente.
     const agujero = new Mesh(new CircleGeometry(0.008, 10), hueco);
-    agujero.rotation.x = -Math.PI / 2;
-    agujero.position.set(0.01, arriba + 0.0008, 0.004);
-    agujero.scale.set(1.4, 0.7, 1);
+    agujero.position.set(0.008, arriba * 0.55, frente + 0.001);
+    agujero.scale.set(1.4, 0.8, 1);
     g.add(agujero);
   } else {
-    // Empaque dañado: aplastado y con una arruga oscura.
+    // Empaque o pieza dañada: aplastado y con una arruga oscura.
     g.scale.set(1, 0.85, 1);
     const arruga = new Mesh(new BoxGeometry(0.05, 0.003, 0.004), negro);
     arruga.position.set(0, arriba * 0.8, frente + 0.001);
@@ -261,13 +311,19 @@ export class Objeto {
   /** Ya se decidió qué hacer con él (repisa, descarte, pedido). */
   clasificado = false;
 
+  /** Qué producto de la categoría es (índice en `subs`). */
+  readonly sub: number;
+
   constructor(
     readonly cat: IdCategoria,
     readonly danado: boolean,
+    sub?: number,
   ) {
-    this.grupo = armar(cat);
+    const subs = categoriaDe(cat).subs;
+    this.sub = sub !== undefined && sub >= 0 && sub < subs.length ? sub : Math.floor(Math.random() * subs.length);
+    this.grupo = armar(cat, this.sub);
     if (danado) {
-      senalDano(cat, this.grupo);
+      senalDano(cat, subs[this.sub].id, this.grupo);
     }
     this.contorno = new Contorno(this.grupo);
     if (danado) {

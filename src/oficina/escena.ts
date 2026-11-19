@@ -52,6 +52,8 @@ export const TRABAJO = new Vector3(0.1, 0, -0.41);
 export const PEDIDO = new Vector3(0.4, 0, -0.41);
 export const CANECA = new Vector3(-0.48, 0, -0.32);
 export const ESCALA_CAJA = 0.7;
+/** El gato encima de la estantería, un poco más pequeño. */
+export const ESCALA_GATO = 0.7;
 export const ALTO_CAJA = 0.14 * ESCALA_CAJA;
 const CAMION = new Vector3(0.64, 0, -0.42);
 const BOTON_DESPACHO = new Vector3(0.64, 0, -0.1);
@@ -79,7 +81,8 @@ export class Escena {
   readonly pedestal: Mesh;
   readonly botonDespacho = new Boton3D('Despachar', 0.14, 0.06, BOTON.principal);
   readonly letreroDespacho = new Lienzo(640, 140, 0.2);
-  readonly reloj = new Lienzo(900, 150, 0.42);
+  /** Reloj digital, a los pies del gato encima de la estantería. */
+  readonly reloj = new Lienzo(900, 150, 0.3);
   readonly letreroPedido = new Lienzo(900, 170, 0.32);
   readonly caneca = new Group();
   /** Resumen del día / de la semana. */
@@ -219,9 +222,14 @@ export class Escena {
     obj.rotation.x = -BAJO_OJOS;
   }
 
-  /** Puesto del gato: en la mesa del frente, entre la estantería y el panel. */
+  /** Arriba de la estantería (coordenadas de `sobre`). */
+  get techoRepisa(): number {
+    return ALTO_REPISA * this.repisa.grupo.scale.x;
+  }
+
+  /** Puesto del gato: encima de la estantería, con el reloj digital a sus pies (coordenadas de la raíz). */
   puestoGato(salida: Vector3): Vector3 {
-    return salida.set(-0.4, this.alto, -0.66);
+    return salida.set(0, this.alto + this.techoRepisa, Z_REPISA - 0.03);
   }
 
   /**
@@ -238,7 +246,8 @@ export class Escena {
     const hombros = 0.82 * estatura;
     const k = Math.min(1, Math.max(0.55, (hombros - this.alto - 0.06) / this.repisa.alturaFilaArriba));
     this.repisa.grupo.scale.setScalar(k);
-    this.reloj.malla.position.y = ALTO_REPISA * k + 0.06;
+    // Reloj al frente del techo de la estantería, donde el gato pone los pies.
+    this.reloj.malla.position.set(0, ALTO_REPISA * k + 0.022, Z_REPISA + 0.105 * k);
     // Paneles a la altura de la vista.
     this.ubicados.forEach((u, obj) => this.ponerPanel(obj, u.angulo, u.distancia));
     return this.alto;

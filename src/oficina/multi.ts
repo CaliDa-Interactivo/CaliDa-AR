@@ -34,7 +34,7 @@ import {
   type Evento,
   type IdCategoria,
 } from './datos.js';
-import { ANGULO, mirarAlCentro } from './escena.js';
+import { ANGULO, ESCALA_GATO, mirarAlCentro } from './escena.js';
 import type { Agarrable } from './interaccion.js';
 import { OficinaSystem, cuentaNueva, type Cuenta } from './juego.js';
 import {
@@ -219,22 +219,27 @@ export class MultiSystem extends OficinaSystem {
     return this.repisaVista().cantidades[i] >= TOPE;
   }
 
-  protected repisaAgregar(i: number, danado: boolean): boolean {
+  protected repisaAgregar(i: number, danado: boolean, sub = -1): boolean {
     if (this.filaLlena(i)) {
       return false;
+    }
+    if (sub >= 0) {
+      this.escena.repisa.preferir(i, sub);
     }
     this.cambioRepisa(i, 1, danado);
     return true;
   }
 
-  protected repisaQuitar(i: number): { danado: boolean } | null {
+  protected repisaQuitar(i: number, sub = -1): { danado: boolean; sub: number } | null {
     const vista = this.repisaVista();
     if (vista.cantidades[i] <= 0) {
       return null;
     }
     const danado = vista.danados[i] > 0 && Math.random() < vista.danados[i] / vista.cantidades[i];
+    // Se saca de la columna tocada (así no cambia el producto que se ve).
+    const sacado = this.escena.repisa.quitar(i, sub);
     this.cambioRepisa(i, -1, danado);
-    return { danado };
+    return { danado, sub: sacado?.sub ?? sub };
   }
 
   private cambioRepisa(i: number, d: 1 | -1, danado: boolean): void {
@@ -330,6 +335,7 @@ export class MultiSystem extends OficinaSystem {
       if (this.fase === 'semana') {
         this.cuentas = [];
         this.escena.puestoGato(this.gato.objeto.position);
+        this.gato.objeto.scale.setScalar(ESCALA_GATO);
       }
       this.dia = c.dia;
       this.tDia = c.tDia;

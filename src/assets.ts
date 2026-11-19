@@ -12,11 +12,23 @@ const glb = (archivo: string, name: string) => ({
 });
 
 export default defineAssets({
-  // Modelos de la página, simplificados para llenar la repisa de la RA.
-  ra_agua: glb('ra/agua', 'Agua (RA)'),
-  ra_lata: glb('ra/alimento_no_perecedero', 'Lata (RA)'),
-  ra_camisa: glb('ra/camisa', 'Camisa (RA)'),
-  ra_papel: glb('ra/papel_higienico', 'Papel higiénico (RA)'),
+  // Los 16 productos de la estantería de la página, simplificados para el Quest.
+  ra_agua: glb('ra/agua', 'agua (RA)'),
+  ra_alimento_no_perecedero: glb('ra/alimento_no_perecedero', 'alimento_no_perecedero (RA)'),
+  ra_comida_bebe: glb('ra/comida_bebe', 'comida_bebe (RA)'),
+  ra_comida_animal: glb('ra/comida_animal', 'comida_animal (RA)'),
+  ra_papel_higienico: glb('ra/papel_higienico', 'papel_higienico (RA)'),
+  ra_higiene_bucal: glb('ra/higiene_bucal', 'higiene_bucal (RA)'),
+  ra_jabon: glb('ra/jabon', 'jabon (RA)'),
+  ra_camisa: glb('ra/camisa', 'camisa (RA)'),
+  ra_vestido: glb('ra/vestido', 'vestido (RA)'),
+  ra_overol: glb('ra/overol', 'overol (RA)'),
+  ra_analgesicos: glb('ra/analgesicos', 'analgesicos (RA)'),
+  ra_antibioticos: glb('ra/antibioticos', 'antibioticos (RA)'),
+  ra_cronico: glb('ra/cronico', 'cronico (RA)'),
+  ra_herramientas: glb('ra/herramientas', 'herramientas (RA)'),
+  ra_material_construccion: glb('ra/material_construccion', 'material_construccion (RA)'),
+  ra_proteccion_personal: glb('ra/proteccion_personal', 'proteccion_personal (RA)'),
   // Panel espacial (UIKitML) con las opciones del centro de acopio.
   'centro-acopio': {
     url: publicAssetUrl('ui/centro-acopio.uikitml'),

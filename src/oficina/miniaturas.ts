@@ -15,7 +15,7 @@ import {
   WebGLRenderTarget,
   type WebGLRenderer,
 } from '@iwsdk/core';
-import type { IdCategoria } from './datos.js';
+import { categoriaDe, type IdCategoria } from './datos.js';
 import { Objeto } from './objetos.js';
 
 const cache = new Map<IdCategoria, HTMLCanvasElement>();
@@ -34,7 +34,7 @@ export function miniatura(renderer: WebGLRenderer, cat: IdCategoria, px = 160): 
     const sol = new DirectionalLight(0xffffff, 1.7);
     sol.position.set(-1, 2, 3);
     escena.add(sol);
-    const obj = new Objeto(cat, false).grupo;
+    const obj = new Objeto(cat, false, categoriaDe(cat).icono).grupo;
     obj.rotation.y = -0.45;
     escena.add(obj);
     obj.updateWorldMatrix(true, true);

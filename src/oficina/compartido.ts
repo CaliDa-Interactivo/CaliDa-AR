@@ -40,7 +40,7 @@ export const estadoInicial = (): Compartido => ({
   tDia: 0,
   cantidades: CATEGORIAS.map((c) => INVENTARIO_INICIAL[c.id]),
   danados: CATEGORIAS.map(() => 0),
-  estados: CATEGORIAS.map((c) => (c.id === 'ropa' ? 'no' : c.id === 'cobijas' ? 'urgente' : 'necesita')),
+  estados: CATEGORIAS.map((c) => (c.id === 'ropa' ? 'no' : c.id === 'medicamentos' ? 'urgente' : 'necesita')),
   chat: [],
   cuentas: [],
   listos: { anfitrion: false, invitado: false },

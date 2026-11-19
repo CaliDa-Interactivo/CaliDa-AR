@@ -1,11 +1,22 @@
 // ============================================================
 // datos.ts — contenido del juego "CaliDa RA · Centro de acopio":
-// categorías de la repisa, defectos, municipios del Valle del
+// categorías y productos de la estantería (los de la página), defectos, municipios del Valle del
 // Cauca y la dificultad de cada jornada (lunes a viernes).
 // Sin lógica ni three.js.
 // ============================================================
 
-export type IdCategoria = 'alimentos' | 'agua' | 'ropa' | 'cobijas' | 'higiene' | 'panales';
+export type IdCategoria = 'alimento' | 'aseo' | 'ropa' | 'medicamentos' | 'construccion';
+
+/** Producto (subcategoría) de la página, con su modelo 3D. */
+export interface Producto {
+  /** El mismo id de la página (js/data.js). */
+  id: string;
+  nombre: string;
+  /** Clave del modelo en assets.ts. */
+  modelo: string;
+  /** Tamaño del objeto suelto (ancho, alto) en metros. */
+  medida: [number, number];
+}
 
 export interface Categoria {
   id: IdCategoria;
@@ -14,19 +25,84 @@ export interface Categoria {
   corto: string;
   /** Lo que tiene un objeto dañado de esta categoría. */
   defecto: string;
+  /** Sus productos, como en la estantería de la página. */
+  subs: Producto[];
+  /** Producto que hace de ícono de la categoría (botones de mensajes). */
+  icono: number;
 }
 
+/** Las categorías y productos de la estantería de la página, con los mismos nombres. */
 export const CATEGORIAS: Categoria[] = [
-  { id: 'alimentos', nombre: 'Alimentos no perecederos', corto: 'Alimentos', defecto: 'vencido' },
-  { id: 'agua', nombre: 'Agua', corto: 'Agua', defecto: 'abierta' },
-  { id: 'ropa', nombre: 'Ropa', corto: 'Ropa', defecto: 'rota' },
-  { id: 'cobijas', nombre: 'Cobijas', corto: 'Cobijas', defecto: 'rota' },
-  { id: 'higiene', nombre: 'Higiene', corto: 'Higiene', defecto: 'empaque dañado' },
-  { id: 'panales', nombre: 'Pañales', corto: 'Pañales', defecto: 'empaque dañado' },
+  {
+    id: 'alimento',
+    nombre: 'Alimento',
+    corto: 'Alimento',
+    defecto: 'vencido',
+    icono: 1,
+    subs: [
+      { id: 'alimento-agua', nombre: 'Agua', modelo: 'ra_agua', medida: [0.04, 0.075] },
+      { id: 'alimento-no-perecederos', nombre: 'No perecederos', modelo: 'ra_alimento_no_perecedero', medida: [0.045, 0.055] },
+      { id: 'alimento-bebe', nombre: 'Comida de bebé', modelo: 'ra_comida_bebe', medida: [0.04, 0.05] },
+      { id: 'alimento-animal', nombre: 'Comida para animales', modelo: 'ra_comida_animal', medida: [0.05, 0.065] },
+    ],
+  },
+  {
+    id: 'aseo',
+    nombre: 'Aseo',
+    corto: 'Aseo',
+    defecto: 'empaque dañado',
+    icono: 0,
+    subs: [
+      { id: 'aseo-corporal', nombre: 'Higiene corporal', modelo: 'ra_papel_higienico', medida: [0.045, 0.05] },
+      { id: 'aseo-bucal', nombre: 'Higiene bucal', modelo: 'ra_higiene_bucal', medida: [0.05, 0.06] },
+      { id: 'aseo-limpieza-hogar', nombre: 'Limpieza del hogar', modelo: 'ra_jabon', medida: [0.045, 0.06] },
+    ],
+  },
+  {
+    id: 'ropa',
+    nombre: 'Ropa',
+    corto: 'Ropa',
+    defecto: 'rota',
+    icono: 0,
+    subs: [
+      { id: 'ropa-hombre', nombre: 'Ropa de hombre', modelo: 'ra_camisa', medida: [0.065, 0.055] },
+      { id: 'ropa-mujer', nombre: 'Ropa de mujer', modelo: 'ra_vestido', medida: [0.05, 0.065] },
+      { id: 'ropa-ninos', nombre: 'Ropa de niños', modelo: 'ra_overol', medida: [0.055, 0.06] },
+    ],
+  },
+  {
+    id: 'medicamentos',
+    nombre: 'Medicamentos',
+    corto: 'Medicamentos',
+    defecto: 'vencido',
+    icono: 0,
+    subs: [
+      { id: 'medicamentos-analgesicos', nombre: 'Analgésicos', modelo: 'ra_analgesicos', medida: [0.045, 0.04] },
+      { id: 'medicamentos-antibioticos', nombre: 'Antibióticos', modelo: 'ra_antibioticos', medida: [0.04, 0.05] },
+      { id: 'medicamentos-cronicos', nombre: 'Crónicos (control)', modelo: 'ra_cronico', medida: [0.04, 0.05] },
+    ],
+  },
+  {
+    id: 'construccion',
+    nombre: 'Construcción',
+    corto: 'Construcción',
+    defecto: 'dañado',
+    icono: 0,
+    subs: [
+      { id: 'construccion-herramientas', nombre: 'Herramientas', modelo: 'ra_herramientas', medida: [0.07, 0.05] },
+      { id: 'construccion-materiales', nombre: 'Material de construcción', modelo: 'ra_material_construccion', medida: [0.06, 0.05] },
+      { id: 'construccion-proteccion', nombre: 'Protección personal', modelo: 'ra_proteccion_personal', medida: [0.06, 0.05] },
+    ],
+  },
 ];
 
 export const indiceCategoria = (id: IdCategoria): number =>
   CATEGORIAS.findIndex((c) => c.id === id);
+
+export const categoriaDe = (id: IdCategoria): Categoria => CATEGORIAS[indiceCategoria(id)];
+
+/** Un producto al azar de la categoría (índice en `subs`). */
+export const subAlAzar = (id: IdCategoria): number => Math.floor(Math.random() * categoriaDe(id).subs.length);
 
 /** Tope de cada categoría en la repisa (2 líneas × 15 puestos). */
 export const TOPE = 30;
@@ -115,9 +191,9 @@ export const JORNADAS: Jornada[] = [
     porCaja: [5, 6],
     eventos: [
       { tipo: 'cajas', en: 4, cantidad: 2 },
-      { tipo: 'pedido', en: 70, municipio: 'Jamundí', pide: { agua: 2, alimentos: 2 }, plazo: 120, familias: 3 },
+      { tipo: 'pedido', en: 70, municipio: 'Jamundí', pide: { alimento: 2, aseo: 2 }, plazo: 120, familias: 3 },
       { tipo: 'cajas', en: 120, cantidad: 2 },
-      { tipo: 'pedido', en: 170, municipio: 'Palmira', pide: { cobijas: 2, ropa: 2 }, plazo: 110, familias: 3 },
+      { tipo: 'pedido', en: 170, municipio: 'Palmira', pide: { ropa: 2, medicamentos: 2 }, plazo: 110, familias: 3 },
     ],
   },
   {
@@ -127,14 +203,14 @@ export const JORNADAS: Jornada[] = [
     porCaja: [6, 7],
     eventos: [
       { tipo: 'cajas', en: 3, cantidad: 3 },
-      { tipo: 'pedido', en: 40, municipio: 'Tuluá', pide: { cobijas: 3, agua: 3 }, plazo: 100, familias: 4 },
+      { tipo: 'pedido', en: 40, municipio: 'Tuluá', pide: { medicamentos: 3, alimento: 3 }, plazo: 100, familias: 4 },
       { tipo: 'cajas', en: 95, cantidad: 2 },
-      { tipo: 'pedido', en: 130, municipio: 'Yumbo', pide: { higiene: 2, panales: 2 }, plazo: 90, familias: 3 },
+      { tipo: 'pedido', en: 130, municipio: 'Yumbo', pide: { aseo: 2, construccion: 2 }, plazo: 90, familias: 3 },
       {
         tipo: 'pedido',
         en: 200,
         municipio: 'Candelaria',
-        pide: { agua: 3, alimentos: 2 },
+        pide: { alimento: 3, medicamentos: 2 },
         plazo: 70,
         urgente: 'Inundación en Candelaria',
         familias: 5,
@@ -148,18 +224,18 @@ export const JORNADAS: Jornada[] = [
     porCaja: [6, 8],
     eventos: [
       { tipo: 'cajas', en: 3, cantidad: 3 },
-      { tipo: 'pedido', en: 30, municipio: 'Buga', pide: { ropa: 3, higiene: 2 }, plazo: 90, familias: 4 },
+      { tipo: 'pedido', en: 30, municipio: 'Buga', pide: { ropa: 3, aseo: 2 }, plazo: 90, familias: 4 },
       { tipo: 'cajas', en: 80, cantidad: 3 },
       {
         tipo: 'pedido',
         en: 115,
         municipio: 'Buenaventura',
-        pide: { agua: 3, cobijas: 3 },
+        pide: { alimento: 3, construccion: 3 },
         plazo: 65,
         urgente: 'Lluvias en Buenaventura',
         familias: 6,
       },
-      { tipo: 'pedido', en: 190, municipio: 'Florida', pide: { panales: 3, alimentos: 3 }, plazo: 80, familias: 4 },
+      { tipo: 'pedido', en: 190, municipio: 'Florida', pide: { medicamentos: 3, alimento: 3 }, plazo: 80, familias: 4 },
     ],
   },
   {
@@ -169,24 +245,24 @@ export const JORNADAS: Jornada[] = [
     porCaja: [7, 8],
     eventos: [
       { tipo: 'cajas', en: 3, cantidad: 3 },
-      { tipo: 'pedido', en: 25, municipio: 'Dagua', pide: { cobijas: 3, ropa: 3 }, plazo: 80, familias: 5 },
+      { tipo: 'pedido', en: 25, municipio: 'Dagua', pide: { construccion: 3, ropa: 3 }, plazo: 80, familias: 5 },
       { tipo: 'cajas', en: 70, cantidad: 3 },
       {
         tipo: 'pedido',
         en: 100,
         municipio: 'El Cerrito',
-        pide: { agua: 4, higiene: 2 },
+        pide: { alimento: 4, aseo: 2 },
         plazo: 60,
         urgente: 'Inundación en El Cerrito',
         familias: 6,
       },
       { tipo: 'cajas', en: 150, cantidad: 2 },
-      { tipo: 'pedido', en: 170, municipio: 'Cartago', pide: { alimentos: 3, panales: 3 }, plazo: 70, familias: 5 },
+      { tipo: 'pedido', en: 170, municipio: 'Cartago', pide: { medicamentos: 3, aseo: 3 }, plazo: 70, familias: 5 },
       {
         tipo: 'pedido',
         en: 235,
         municipio: 'Pradera',
-        pide: { cobijas: 2, agua: 3 },
+        pide: { construccion: 2, alimento: 3 },
         plazo: 55,
         urgente: 'Lluvias en Pradera',
         familias: 5,
@@ -204,46 +280,44 @@ export const JORNADAS: Jornada[] = [
         tipo: 'pedido',
         en: 20,
         municipio: 'Buenaventura',
-        pide: { agua: 4, cobijas: 3 },
+        pide: { alimento: 4, medicamentos: 3 },
         plazo: 55,
         urgente: 'Lluvias en Buenaventura',
         familias: 7,
       },
       { tipo: 'cajas', en: 75, cantidad: 3 },
-      { tipo: 'pedido', en: 105, municipio: 'Sevilla', pide: { ropa: 4, higiene: 3 }, plazo: 65, familias: 5 },
+      { tipo: 'pedido', en: 105, municipio: 'Sevilla', pide: { ropa: 4, aseo: 3 }, plazo: 65, familias: 5 },
       { tipo: 'cajas', en: 150, cantidad: 3 },
       {
         tipo: 'pedido',
         en: 175,
         municipio: 'Jamundí',
-        pide: { alimentos: 4, panales: 3 },
+        pide: { construccion: 4, medicamentos: 3 },
         plazo: 55,
         urgente: 'Inundación en Jamundí',
         familias: 7,
       },
-      { tipo: 'pedido', en: 235, municipio: 'Zarzal', pide: { cobijas: 3, agua: 3 }, plazo: 55, familias: 5 },
+      { tipo: 'pedido', en: 235, municipio: 'Zarzal', pide: { alimento: 3, ropa: 3 }, plazo: 55, familias: 5 },
     ],
   },
 ];
 
 /** Inventario con que abre el centro el lunes (Ropa casi llena a propósito). */
 export const INVENTARIO_INICIAL: Record<IdCategoria, number> = {
-  alimentos: 8,
-  agua: 10,
+  alimento: 10,
+  aseo: 9,
   ropa: 26,
-  cobijas: 6,
-  higiene: 9,
-  panales: 7,
+  medicamentos: 7,
+  construccion: 6,
 };
 
 /** Probabilidad de cada categoría dentro de las cajas que llegan. */
 export const PESO_CATEGORIA: Record<IdCategoria, number> = {
-  alimentos: 1.2,
-  agua: 1.1,
+  alimento: 1.3,
+  aseo: 1.1,
   ropa: 1.3,
-  cobijas: 0.9,
-  higiene: 1,
-  panales: 0.8,
+  medicamentos: 0.9,
+  construccion: 0.8,
 };
 
 export const MENSAJE_FINAL =

@@ -56,12 +56,15 @@ export class Teclado {
   }
 }
 
-// ---- Chat ----------------------------------------------------------
+// ---- Mensajes entre jugadores -----------------------------------------
 //
 // Sin teclado ni texto libre: solo botones con mensajes ya escritos.
-// Un botón por categoría con la "foto" de su producto (la misma de la
-// fila de la estantería): el despachador pide ("Necesito …") y el
-// receptor avisa ("Llegó …"). Más un mensaje general por rol.
+//  · Un botón por categoría con la "foto" de su producto (la misma de la
+//    fila de la estantería): el otro recibe "Necesito [ícono] [categoría]".
+//  · Cuatro mensajes fijos: ¡Hola!, Pedido urgente, Categoría llena y
+//    Listo, enviado.
+// Lo recibido se ve con su ícono y la hora del reloj del juego (los
+// últimos 5) y suena una notificación.
 
 export interface MensajeChat {
   id: number;
@@ -69,21 +72,90 @@ export interface MensajeChat {
   texto: string;
   /** Si el mensaje es sobre una categoría (se dibuja su ícono). */
   cat?: IdCategoria;
+  /** Mensaje fijo (se dibuja su ícono). */
+  clave?: ClaveMensaje;
+  /** Hora del reloj del juego cuando se mandó. */
+  hora?: string;
 }
 
-/** Lo que dice cada rol con los botones de categoría. */
-export const VERBO: Record<Rol, string> = { despachador: 'Necesito', receptor: 'Llegó' };
+export type ClaveMensaje = 'hola' | 'urgente' | 'llena' | 'enviado';
 
-export const GENERAL: Record<Rol, string> = {
-  receptor: '¿Qué necesitas?',
-  despachador: '¡Gracias!',
-};
+export const MENSAJES: { clave: ClaveMensaje; texto: string }[] = [
+  { clave: 'hola', texto: '¡Hola!' },
+  { clave: 'urgente', texto: 'Pedido urgente' },
+  { clave: 'llena', texto: 'Categoría llena' },
+  { clave: 'enviado', texto: 'Listo, enviado' },
+];
 
-/** Chat dibujado en un lienzo, con sus botones debajo. */
+const iconosMensaje = new Map<ClaveMensaje, HTMLCanvasElement>();
+
+/** Ícono dibujado de cada mensaje fijo (mismos colores de la página). */
+export function iconoMensaje(clave: ClaveMensaje): HTMLCanvasElement {
+  const hecho = iconosMensaje.get(clave);
+  if (hecho) {
+    return hecho;
+  }
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d')!;
+  const circulo = (color: string) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(64, 64, 54, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (clave === 'hola') {
+    // Carita sonriente amarilla.
+    circulo('#F2C14E');
+    ctx.fillStyle = '#5A2A0C';
+    ctx.beginPath();
+    ctx.arc(46, 52, 7, 0, Math.PI * 2);
+    ctx.arc(82, 52, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#5A2A0C';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(64, 66, 26, 0.2 * Math.PI, 0.8 * Math.PI);
+    ctx.stroke();
+  } else if (clave === 'urgente') {
+    // Signo de admiración en rojo carmín.
+    circulo('#CC0100');
+    ctx.fillStyle = '#FFF6E6';
+    ctx.font = `900 84px ${FUENTE}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', 64, 68);
+  } else if (clave === 'llena') {
+    // Caja llena: cajón cobrizo con su tapa y una franja roja.
+    circulo('#FFF8EC');
+    ctx.fillStyle = '#B87048';
+    ctx.fillRect(28, 50, 72, 46);
+    ctx.fillStyle = '#C98F62';
+    ctx.fillRect(22, 38, 84, 16);
+    ctx.fillStyle = '#CC0100';
+    ctx.fillRect(28, 66, 72, 10);
+  } else {
+    // Chulo blanco sobre verde salvia oscuro.
+    circulo('#3E7A6C');
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 13;
+    ctx.beginPath();
+    ctx.moveTo(38, 66);
+    ctx.lineTo(56, 84);
+    ctx.lineTo(90, 46);
+    ctx.stroke();
+  }
+  iconosMensaje.set(clave, c);
+  return c;
+}
+
+/** Mensajes con sus botones debajo. */
 export class Chat {
   readonly grupo = new Group();
   readonly botones: Boton3D[] = [];
-  alEnviar: (texto: string, cat?: IdCategoria) => void = () => undefined;
+  alEnviar: (texto: string, extra: { cat?: IdCategoria; clave?: ClaveMensaje }) => void = () => undefined;
   private lienzo: Lienzo;
   private iconos: Partial<Record<IdCategoria, HTMLCanvasElement>> = {};
 
@@ -95,23 +167,28 @@ export class Chat {
     this.lienzo = new Lienzo(900, 560, ancho);
     this.grupo.add(this.lienzo.malla);
     const alto = (ancho * 560) / 900;
-    const anchoB = ancho / 4 - 0.006;
-    const fila = (i: number) => -alto / 2 - 0.026 - Math.floor(i / 4) * 0.044;
-    const columna = (i: number) => ((i % 4) - 1.5) * (anchoB + 0.006);
+    const PASO_Y = 0.044;
+    // Categorías: 3 columnas × 2 filas.
+    const anchoC = ancho / 3 - 0.006;
     CATEGORIAS.forEach((cat, i) => {
-      const b = new Boton3D(cat.corto, anchoB, 0.038, BOTON.secundario);
+      const b = new Boton3D(cat.corto, anchoC, 0.038, BOTON.secundario);
       this.iconos[cat.id] = icono(cat.id);
       b.ponerIcono(this.iconos[cat.id]!);
-      b.grupo.position.set(columna(i), fila(i), 0);
-      b.alPresionar = () => this.alEnviar(`${VERBO[yo]} ${cat.corto.toLowerCase()}`, cat.id);
+      b.grupo.position.set(((i % 3) - 1) * (anchoC + 0.006), -alto / 2 - 0.026 - Math.floor(i / 3) * PASO_Y, 0);
+      b.alPresionar = () => this.alEnviar(`Necesito ${cat.corto.toLowerCase()}`, { cat: cat.id });
       this.grupo.add(b.grupo);
       this.botones.push(b);
     });
-    const general = new Boton3D(GENERAL[yo], anchoB * 2 + 0.006, 0.038, BOTON.principal);
-    general.grupo.position.set((columna(6) + columna(7)) / 2, fila(6), 0);
-    general.alPresionar = () => this.alEnviar(GENERAL[yo]);
-    this.grupo.add(general.grupo);
-    this.botones.push(general);
+    // Mensajes fijos: 2 columnas × 2 filas.
+    const anchoM = ancho / 2 - 0.006;
+    MENSAJES.forEach((m, i) => {
+      const b = new Boton3D(m.texto, anchoM, 0.038, m.clave === 'urgente' ? BOTON.peligro : BOTON.principal);
+      b.ponerIcono(iconoMensaje(m.clave));
+      b.grupo.position.set(((i % 2) - 0.5) * (anchoM + 0.006), -alto / 2 - 0.026 - (2 + Math.floor(i / 2)) * PASO_Y, 0);
+      b.alPresionar = () => this.alEnviar(m.texto, { clave: m.clave });
+      this.grupo.add(b.grupo);
+      this.botones.push(b);
+    });
   }
 
   pintar(mensajes: MensajeChat[], conectado: boolean): void {
@@ -127,36 +204,47 @@ export class Chat {
     ctx.beginPath();
     ctx.arc(l.ancho - 50, 44, 12, 0, Math.PI * 2);
     ctx.fill();
-    // Últimos mensajes, de abajo hacia arriba.
-    let y = 530;
-    ctx.font = `700 34px ${FUENTE}`;
-    for (let i = mensajes.length - 1; i >= 0 && y > 150; i--) {
-      const m = mensajes[i];
+    // Los últimos 5, el más nuevo abajo.
+    const ultimos = mensajes.slice(-5);
+    const ALTO = 80;
+    let y = 540 - ultimos.length * (ALTO + 10);
+    for (const m of ultimos) {
       const mio = m.de === this.yo;
-      const icono = m.cat ? (this.iconos[m.cat] ?? null) : null;
-      // Con categoría: "Necesito" + ícono + nombre; si no, el texto.
-      const texto = m.cat ? VERBO[m.de] : m.texto;
-      const nombre = m.cat ? (CATEGORIAS.find((c) => c.id === m.cat)?.corto ?? '') : '';
-      const alto = icono ? 92 : 64;
-      ctx.font = `700 34px ${FUENTE}`;
-      const anchoTexto = ctx.measureText(texto).width;
-      ctx.font = `400 26px ${FUENTE}`;
-      const anchoNombre = nombre ? ctx.measureText(nombre).width : 0;
-      const ancho = Math.min(l.ancho - 120, 40 + anchoTexto + (icono ? 14 + 76 + 10 + anchoNombre : 0));
+      const icono = m.cat ? (this.iconos[m.cat] ?? null) : m.clave ? iconoMensaje(m.clave) : null;
+      // Categoría: "Necesito" + ícono + nombre. Fijo: ícono + texto.
+      const antes = m.cat ? 'Necesito' : '';
+      const despues = m.cat ? (CATEGORIAS.find((c) => c.id === m.cat)?.corto ?? '') : m.texto;
+      ctx.font = `700 32px ${FUENTE}`;
+      const anchoAntes = antes ? ctx.measureText(antes).width + 12 : 0;
+      const anchoDespues = ctx.measureText(despues).width;
+      ctx.font = `400 24px ${FUENTE}`;
+      const hora = m.hora ?? '';
+      const anchoHora = hora ? ctx.measureText(hora).width + 18 : 0;
+      const ancho = Math.min(l.ancho - 80, 28 + anchoAntes + (icono ? 70 : 0) + anchoDespues + anchoHora + 26);
       const x = mio ? l.ancho - 34 - ancho : 34;
       ctx.fillStyle = mio ? BOTON.principal : '#F3E4CB';
-      rect(ctx, x, y - alto, ancho, alto, alto / 2);
+      rect(ctx, x, y, ancho, ALTO, ALTO / 2);
       ctx.fill();
+      let cx = x + 28;
+      const medio = y + ALTO / 2 + 11;
       ctx.fillStyle = mio ? BOTON.textoClaro : BOTON.textoOscuro;
-      ctx.font = `700 34px ${FUENTE}`;
-      ctx.fillText(texto, x + 22, y - alto / 2 + 12);
-      if (icono) {
-        const xi = x + 22 + anchoTexto + 14;
-        ctx.drawImage(icono, xi, y - alto + 8, 76, 76);
-        ctx.font = `400 26px ${FUENTE}`;
-        ctx.fillText(nombre, xi + 86, y - alto / 2 + 10);
+      ctx.font = `700 32px ${FUENTE}`;
+      if (antes) {
+        ctx.fillText(antes, cx, medio);
+        cx += anchoAntes;
       }
-      y -= alto + 12;
+      if (icono) {
+        ctx.drawImage(icono, cx, y + 10, 60, 60);
+        cx += 70;
+      }
+      ctx.fillText(despues, cx, medio);
+      cx += anchoDespues + 18;
+      if (hora) {
+        ctx.font = `400 24px ${FUENTE}`;
+        ctx.fillStyle = mio ? 'rgba(255, 246, 230, 0.8)' : '#6E655D';
+        ctx.fillText(hora, cx, medio - 2);
+      }
+      y += ALTO + 10;
     }
     if (mensajes.length === 0) {
       ctx.fillStyle = COLOR.gris;

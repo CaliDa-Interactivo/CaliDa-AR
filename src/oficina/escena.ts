@@ -10,8 +10,16 @@
 //
 // Todo lo que va sobre las mesas cuelga de `sobre`, cuyo y = 0 es
 // la superficie de las mesas. Las mesas flotan (no tienen patas ni
-// dependen de una mesa real): su altura (la cintura) se ajusta al
-// colocar la oficina. Todo queda al alcance del brazo.
+// dependen de una mesa real).
+//
+// Ergonomía (se calibra al colocar, de pie): estatura ≈ ojos / 0,93.
+//   · Mesa: codo (0,63 × estatura) menos 7,5 cm.
+//   · Estantería: sus filas entre la cadera (0,5) y los hombros (0,82);
+//     se achica si hace falta, nunca queda por encima de los ojos.
+//   · Paneles: a 70 cm, el centro 12,5° por debajo de los ojos y
+//     mirando a la persona.
+//   · Lo que se agarra, a 35–60 cm del pecho (la persona está en el
+//     origen).
 // ============================================================
 import {
   BoxGeometry,
@@ -34,7 +42,7 @@ const mate = (color: string) => new MeshStandardMaterial({ color, roughness: 0.8
 
 /** Rectángulos de las mesas (x0, x1, z0, z1) sobre el plano. */
 const MESAS: [number, number, number, number][] = [
-  [-0.55, 0.55, -0.88, -0.25], // frente (más honda: lleva la estantería)
+  [-0.55, 0.55, -0.78, -0.25], // frente (lleva la estantería)
   [-0.9, -0.55, -0.75, -0.05], // izquierda
   [0.55, 0.9, -0.75, -0.05], // derecha
 ];
@@ -45,7 +53,14 @@ export const PEDIDO = new Vector3(0.4, 0, -0.41);
 export const CANECA = new Vector3(-0.48, 0, -0.32);
 export const ESCALA_CAJA = 0.7;
 export const ALTO_CAJA = 0.14 * ESCALA_CAJA;
-const CAMION = new Vector3(0.74, 0, -0.44);
+const CAMION = new Vector3(0.64, 0, -0.42);
+const BOTON_DESPACHO = new Vector3(0.64, 0, -0.1);
+/** Estantería: lo más cerca posible sin tapar la zona de trabajo. */
+const Z_REPISA = -0.62;
+/** Ángulos (grados, positivo a la izquierda) de los paneles alrededor de la persona. */
+export const ANGULO = { panel: 58, derecha: -58, mensajes: 96, resumen: 0 };
+const DISTANCIA_PANEL = 0.7;
+const BAJO_OJOS = (12.5 * Math.PI) / 180;
 const ESCALA_CAMION = 0.75;
 
 /** Gira un objeto en (x, z) para que su cara (+Z) mire al jugador. */
@@ -70,24 +85,29 @@ export class Escena {
   /** Resumen del día / de la semana. */
   readonly resumen = new Group();
   readonly lienzoResumen = new Lienzo(1200, 860, 0.62);
-  readonly siguiente = new Boton3D('Siguiente jornada', 0.2, 0.05, BOTON.principal);
+  readonly siguiente = new Boton3D('Continuar', 0.2, 0.05, BOTON.principal);
+  readonly finalizar = new Boton3D('Finalizar experiencia', 0.24, 0.05, BOTON.secundario);
   /** Flecha del tutorial. */
   readonly flecha: Mesh;
   alto = 0.9;
+  /** Altura de los ojos sobre el piso medida al calibrar. */
+  ojos = 1.55;
+  /** Paneles que se ubican según la ergonomía (ángulo y distancia). */
+  private ubicados = new Map<Object3D, { angulo: number; distancia: number }>();
 
   constructor() {
     this.raiz.add(this.sobre);
     this.armarMesas();
 
     // Estantería de la página al fondo de la mesa del frente.
-    this.repisa.grupo.position.set(0, 0, -0.76);
+    this.repisa.grupo.position.set(0, 0, Z_REPISA);
     this.sobre.add(this.repisa.grupo);
     const sombraRepisa = sombra(1.1, 0.25, 0.25);
-    sombraRepisa.position.set(0, 0.002, -0.76);
+    sombraRepisa.position.set(0, 0.002, Z_REPISA);
     this.sobre.add(sombraRepisa);
 
     // Reloj del día, encima de la repisa.
-    this.reloj.malla.position.set(0, ALTO_REPISA + 0.08, -0.8);
+    this.reloj.malla.position.set(0, ALTO_REPISA + 0.08, Z_REPISA - 0.03);
     this.sobre.add(this.reloj.malla);
 
     // Caneca de descarte (abierta) sobre la mesa.
@@ -117,11 +137,9 @@ export class Escena {
     this.letreroPedido.malla.position.set(PEDIDO.x, 0.2, PEDIDO.z);
     this.sobre.add(this.letreroPedido.malla);
 
-    // Panel de avisos a la izquierda, inclinado hacia atrás.
-    this.panel.grupo.position.set(-0.72, 0.21, -0.36);
-    mirarAlCentro(this.panel.grupo);
-    this.panel.grupo.rotation.x = -0.28;
+    // Panel de avisos a la izquierda.
     this.sobre.add(this.panel.grupo);
+    this.ubicar(this.panel.grupo, ANGULO.panel);
 
     // Camión a la derecha (mira hacia el fondo) y su botón.
     this.camion = crearCamion();
@@ -130,22 +148,22 @@ export class Escena {
     this.camion.rotation.y = Math.PI / 2;
     this.sobre.add(this.camion);
     this.pedestal = new Mesh(new BoxGeometry(0.17, 0.05, 0.11), mate(COLOR.carbon));
-    this.pedestal.position.set(0.68, 0.025, -0.12);
+    this.pedestal.position.set(BOTON_DESPACHO.x, 0.025, BOTON_DESPACHO.z);
     this.sobre.add(this.pedestal);
-    this.botonDespacho.grupo.position.set(0.68, 0.055, -0.12);
+    this.botonDespacho.grupo.position.set(BOTON_DESPACHO.x, 0.055, BOTON_DESPACHO.z);
     mirarAlCentro(this.botonDespacho.grupo);
     this.botonDespacho.grupo.rotation.x = -1.05;
     this.sobre.add(this.botonDespacho.grupo);
-    this.letreroDespacho.malla.position.set(0.68, 0.16, -0.14);
+    this.letreroDespacho.malla.position.set(BOTON_DESPACHO.x, 0.16, BOTON_DESPACHO.z - 0.02);
     mirarAlCentro(this.letreroDespacho.malla);
     this.sobre.add(this.letreroDespacho.malla);
 
     // Resumen (día o semana), al frente.
     this.resumen.add(this.lienzoResumen.malla);
     this.siguiente.grupo.position.set(0, -0.19, 0.004);
-    this.resumen.add(this.siguiente.grupo);
-    this.resumen.position.set(0.04, 0.42, -0.42);
-    this.resumen.rotation.x = -0.12;
+    this.finalizar.grupo.position.set(0, -0.19, 0.004);
+    this.resumen.add(this.siguiente.grupo, this.finalizar.grupo);
+    this.ubicar(this.resumen, ANGULO.resumen, 0.52);
     this.resumen.visible = false;
     this.sobre.add(this.resumen);
 
@@ -157,7 +175,22 @@ export class Escena {
   }
 
   get botones(): Boton3D[] {
-    return [...this.panel.todosLosBotones, this.botonDespacho, this.siguiente];
+    return [...this.panel.todosLosBotones, this.botonDespacho, this.siguiente, this.finalizar];
+  }
+
+  /**
+   * Botones del resumen. Día: "Continuar" y "Finalizar experiencia" (el
+   * viernes solo "Finalizar experiencia"). Resumen total: "Volver al inicio".
+   */
+  botonesResumen(modo: 'dia' | 'viernes' | 'total'): void {
+    const s = this.siguiente;
+    const f = this.finalizar;
+    s.activo = modo !== 'viernes';
+    f.activo = modo !== 'total';
+    s.escribir(modo === 'total' ? 'Volver al inicio' : 'Continuar');
+    const ambos = modo === 'dia';
+    s.grupo.position.x = ambos ? -0.125 : 0;
+    f.grupo.position.x = ambos ? 0.125 : 0;
   }
 
   /** Tableros flotantes con la madera de la estantería de la página. */
@@ -171,10 +204,44 @@ export class Escena {
     }
   }
 
-  /** Altura de las mesas sobre el piso (a la cintura del jugador). */
-  ajustarAltura(alto: number): void {
-    this.alto = alto;
-    this.sobre.position.y = alto;
+  /** Pone un panel a `angulo` grados (positivo a la izquierda), a la altura de la vista. */
+  ubicar(obj: Object3D, angulo: number, distancia = DISTANCIA_PANEL): void {
+    this.ubicados.set(obj, { angulo, distancia });
+    this.ponerPanel(obj, angulo, distancia);
+  }
+
+  private ponerPanel(obj: Object3D, angulo: number, distancia: number): void {
+    const a = (angulo * Math.PI) / 180;
+    // El centro, 12,5° por debajo de la línea de los ojos.
+    const y = this.ojos - distancia * Math.tan(BAJO_OJOS) - this.alto;
+    obj.position.set(-Math.sin(a) * distancia, y, -Math.cos(a) * distancia);
+    mirarAlCentro(obj);
+    obj.rotation.x = -BAJO_OJOS;
+  }
+
+  /** Puesto del gato: en la mesa del frente, entre la estantería y el panel. */
+  puestoGato(salida: Vector3): Vector3 {
+    return salida.set(-0.4, this.alto, -0.66);
+  }
+
+  /**
+   * Ajusta todo a la estatura (calibración de pie): `ojos` es la altura de
+   * los ojos sobre el piso. Devuelve la altura de la mesa.
+   */
+  ajustarErgonomia(ojos: number): number {
+    this.ojos = Math.min(2.05, Math.max(1.0, ojos));
+    const estatura = this.ojos / 0.93;
+    // Mesa: a la altura del codo menos 7,5 cm.
+    this.alto = Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
+    this.sobre.position.y = this.alto;
+    // Estantería: la fila de arriba (con sus productos) no pasa de los hombros.
+    const hombros = 0.82 * estatura;
+    const k = Math.min(1, Math.max(0.55, (hombros - this.alto - 0.06) / this.repisa.alturaFilaArriba));
+    this.repisa.grupo.scale.setScalar(k);
+    this.reloj.malla.position.y = ALTO_REPISA * k + 0.06;
+    // Paneles a la altura de la vista.
+    this.ubicados.forEach((u, obj) => this.ponerPanel(obj, u.angulo, u.distancia));
+    return this.alto;
   }
 
   /** Altura de apoyo en (x, z) de `sobre`: la mesa (0) o el piso. */

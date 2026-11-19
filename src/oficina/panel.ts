@@ -49,6 +49,7 @@ export class Panel {
   readonly botonesMunicipio: Boton3D[] = [];
   readonly volver: Boton3D;
   readonly mover: Boton3D;
+  readonly recalibrar: Boton3D;
   readonly saltar: Boton3D;
   modo: 'avisos' | 'municipios' = 'avisos';
   /** El pedido al que se le está eligiendo el municipio. */
@@ -87,18 +88,22 @@ export class Panel {
     this.volver = new Boton3D('Volver', 0.1, 0.036, BOTON.secundario);
     this.colocar(this.volver, 960, 800);
     this.volver.alPresionar = () => this.verAvisos();
-    // Debajo del panel: mover la oficina y saltar el tutorial.
-    this.mover = new Boton3D('Mover oficina', 0.13, 0.036, BOTON.secundario);
-    this.mover.grupo.position.set(-0.12, -ANCHO_PANEL * (PX_ALTO / PX_ANCHO) / 2 - 0.035, 0);
+    // Debajo del panel (el menú): mover la oficina, recalibrar la altura y saltar el tutorial.
+    const yMenu = -ANCHO_PANEL * (PX_ALTO / PX_ANCHO) / 2 - 0.035;
+    this.mover = new Boton3D('Mover oficina', 0.135, 0.036, BOTON.secundario);
+    this.mover.grupo.position.set(-0.145, yMenu, 0);
     this.grupo.add(this.mover.grupo);
-    this.saltar = new Boton3D('Saltar tutorial', 0.15, 0.036, BOTON.secundario);
-    this.saltar.grupo.position.set(0.11, -ANCHO_PANEL * (PX_ALTO / PX_ANCHO) / 2 - 0.035, 0);
+    this.recalibrar = new Boton3D('Recalibrar altura', 0.145, 0.036, BOTON.secundario);
+    this.recalibrar.grupo.position.set(0, yMenu, 0);
+    this.grupo.add(this.recalibrar.grupo);
+    this.saltar = new Boton3D('Saltar tutorial', 0.135, 0.036, BOTON.secundario);
+    this.saltar.grupo.position.set(0.145, yMenu, 0);
     this.grupo.add(this.saltar.grupo);
     this.verAvisos();
   }
 
   get todosLosBotones(): Boton3D[] {
-    return [...this.botonesAviso, ...this.botonesMunicipio, this.volver, this.mover, this.saltar];
+    return [...this.botonesAviso, ...this.botonesMunicipio, this.volver, this.mover, this.recalibrar, this.saltar];
   }
 
   private colocar(b: Boton3D, px: number, py: number): void {

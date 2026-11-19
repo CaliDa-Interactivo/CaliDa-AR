@@ -44,6 +44,8 @@ export const ANCHO_REPISA = 0.84;
 const S = ANCHO_REPISA / MUEBLE.ancho;
 export const ALTO_REPISA = MUEBLE.alto * S;
 const POR_LINEA = 15;
+/** Altura de la tabla de la fila de arriba sobre la base (m, sin achicar). */
+const ALTURA_FILA_ARRIBA = 3.797 * (ANCHO_REPISA / 6.15);
 /** Escala de los objetos dentro de la repisa. */
 export const ESCALA_REPISA = 0.5;
 
@@ -164,6 +166,8 @@ class Placa {
 // ---- Estantería ------------------------------------------------------
 
 export class Repisa {
+  /** Altura de la fila de arriba (para la ergonomía). */
+  readonly alturaFilaArriba = ALTURA_FILA_ARRIBA;
   readonly grupo = new Group();
   readonly cantidades: number[] = CATEGORIAS.map(() => 0);
   readonly danados: number[] = CATEGORIAS.map(() => 0);

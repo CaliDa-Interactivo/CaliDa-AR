@@ -7,7 +7,7 @@
 // ============================================================
 import { CATEGORIAS, INVENTARIO_INICIAL, JORNADAS, TOPE, type IdCategoria } from './datos.js';
 import { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
-import type { EstadoCat, MensajeChat } from './multi-ui.js';
+import type { ClaveMensaje, EstadoCat, MensajeChat } from './multi-ui.js';
 import type { Rol } from './red.js';
 
 export interface Compartido {
@@ -28,10 +28,11 @@ export interface Compartido {
 export type Op =
   | { tipo: 'repisa'; seq: number; i: number; d: 1 | -1; danado: boolean }
   | { tipo: 'estado'; i: number; valor: EstadoCat }
-  | { tipo: 'chat'; de: Rol; texto: string; cat?: IdCategoria }
+  | { tipo: 'chat'; de: Rol; texto: string; cat?: IdCategoria; clave?: ClaveMensaje; hora?: string }
   | { tipo: 'listo' }
   | { tipo: 'cuenta'; dia: number; cuenta: Cuenta }
-  | { tipo: 'siguiente' };
+  | { tipo: 'siguiente' }
+  | { tipo: 'finalizar' };
 
 export const estadoInicial = (): Compartido => ({
   fase: 'espera',
@@ -81,7 +82,14 @@ export function aplicarOp(c: Compartido, o: Op, mia: boolean): { comp: Compartid
   } else if (o.tipo === 'estado') {
     c.estados[o.i] = o.valor;
   } else if (o.tipo === 'chat') {
-    c.chat.push({ id: (c.chat[c.chat.length - 1]?.id ?? 0) + 1, de: o.de, texto: o.texto, ...(o.cat ? { cat: o.cat } : {}) });
+    c.chat.push({
+      id: (c.chat[c.chat.length - 1]?.id ?? 0) + 1,
+      de: o.de,
+      texto: o.texto,
+      ...(o.cat ? { cat: o.cat } : {}),
+      ...(o.clave ? { clave: o.clave } : {}),
+      ...(o.hora ? { hora: o.hora } : {}),
+    });
     c.chat = c.chat.slice(-30);
   } else if (o.tipo === 'listo') {
     c.listos[mia ? 'anfitrion' : 'invitado'] = true;
@@ -103,11 +111,14 @@ export function aplicarOp(c: Compartido, o: Op, mia: boolean): { comp: Compartid
         c.fase = 'semana';
       }
     } else if (c.fase === 'semana') {
+      // Volver al inicio: cada uno coloca su oficina otra vez.
       const nuevo = estadoInicial();
-      nuevo.listos = { anfitrion: true, invitado: true };
-      nuevo.fase = 'jornada';
       nuevo.chat = c.chat;
       return { comp: nuevo };
+    }
+  } else if (o.tipo === 'finalizar') {
+    if (c.fase === 'resumen') {
+      c.fase = 'semana';
     }
   }
   return { comp: c };

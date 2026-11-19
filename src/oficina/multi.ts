@@ -34,7 +34,7 @@ import {
   type Evento,
   type IdCategoria,
 } from './datos.js';
-import { mirarAlCentro } from './escena.js';
+import { ANGULO, mirarAlCentro } from './escena.js';
 import type { Agarrable } from './interaccion.js';
 import { OficinaSystem, cuentaNueva, type Cuenta } from './juego.js';
 import {
@@ -72,7 +72,7 @@ export class MultiSystem extends OficinaSystem {
   private pendientes: Extract<Op, { tipo: 'repisa' }>[] = [];
   private tEnvio = 0;
   private colocado = false;
-  private ultimoChat = 0;
+  private ultimoChat = -1;
   private cuentaInvitado: Cuenta | null = null;
   private esperaResumen = 0;
   private avisoRed = '';
@@ -110,18 +110,18 @@ export class MultiSystem extends OficinaSystem {
     e.panel.saltar.activo = false;
     // Mensajes encima del computador de la izquierda: solo con botones.
     this.chat = new Chat(this.rol, 0.4, (cat) => miniatura(this.world.renderer, cat));
-    this.chat.alEnviar = (texto, cat) => this.op({ tipo: 'chat', de: this.rol, texto, ...(cat ? { cat } : {}) });
+    this.chat.alEnviar = (texto, extra) => this.op({ tipo: 'chat', de: this.rol, texto, ...extra, hora: this.hora() });
     this.inter.botones.push(...this.chat.botones);
+    // Los mensajes a la izquierda del panel, a la altura de la vista.
+    e.sobre.add(this.chat.grupo);
+    e.ubicar(this.chat.grupo, ANGULO.mensajes);
 
     if (this.rol === 'receptor') {
       // Izquierda: el formulario de registro en lugar del panel de avisos.
       e.panel.grupo.visible = false;
       this.formulario = new Formulario(0.44);
-      this.formulario.grupo.position.copy(e.panel.grupo.position);
-      this.formulario.grupo.rotation.copy(e.panel.grupo.rotation);
       e.sobre.add(this.formulario.grupo);
-      this.formulario.grupo.add(this.chat.grupo);
-      this.chat.grupo.position.set(0, 0.47, 0);
+      e.ubicar(this.formulario.grupo, ANGULO.panel);
       // El teclado solo sirve para el formulario (nombre, cédula, cantidad).
       this.teclado.grupo.position.set(-0.66, 0.012, -0.13);
       mirarAlCentro(this.teclado.grupo);
@@ -134,23 +134,20 @@ export class MultiSystem extends OficinaSystem {
       this.formulario.rechazar.alPresionar = () => this.rechazarDonante();
       this.inter.botones.push(...this.formulario.botones);
       // "Mover oficina" pasa al formulario (el panel de avisos no se usa).
-      this.formulario.grupo.add(e.panel.mover.grupo);
+      this.formulario.grupo.add(e.panel.mover.grupo, e.panel.recalibrar.grupo);
       // Derecha: panel de estado del centro (sin camión ni despacho).
       for (const o of [e.camion, e.botonDespacho.grupo, e.letreroDespacho.malla, e.pedestal, this.cajaPedido.raiz, e.letreroPedido.malla]) {
         o.visible = false;
       }
       e.botonDespacho.activo = false;
       this.panelEstado = new PanelEstado(0.44);
-      this.panelEstado.grupo.position.set(0.72, 0.21, -0.36);
-      mirarAlCentro(this.panelEstado.grupo);
-      this.panelEstado.grupo.rotation.x = -0.28;
       e.sobre.add(this.panelEstado.grupo);
+      e.ubicar(this.panelEstado.grupo, ANGULO.derecha);
       this.panelEstado.alCambiar = (i, valor) => this.op({ tipo: 'estado', i, valor });
       this.inter.botones.push(...this.panelEstado.botones.flat());
     } else {
       // Despachador: chat encima del computador de necesidades.
-      e.panel.grupo.add(this.chat.grupo);
-      this.chat.grupo.position.set(0, 0.47, 0);
+
       this.cajaInfinita = true;
       // Sin caneca: el despachador no clasifica donaciones.
       this.conCaneca = false;
@@ -310,8 +307,12 @@ export class MultiSystem extends OficinaSystem {
     this.escena.repisa.fijarEstados(c.estados.map((e) => PUNTO_ESTADO[e]));
     // Mensaje nuevo del compañero: suena.
     const ultimo = c.chat[c.chat.length - 1];
+    if (this.ultimoChat < 0) {
+      // Lo que ya estaba al conectarse no suena.
+      this.ultimoChat = ultimo?.id ?? 0;
+    }
     if (ultimo && ultimo.id > this.ultimoChat) {
-      if (this.ultimoChat > 0 && ultimo.de !== this.rol) {
+      if (ultimo.de !== this.rol) {
         sonidos.campana();
         this.manos.lista.forEach((m) => m.vibrar(0.4, 60));
       }
@@ -320,10 +321,15 @@ export class MultiSystem extends OficinaSystem {
     if (!this.colocado || this.fase === 'colocar') {
       return;
     }
+    if (c.fase === 'espera' && this.fase === 'semana') {
+      // El otro (o yo) eligió volver al inicio.
+      this.volverAlInicio();
+      return;
+    }
     if (c.fase === 'jornada' && (this.fase === 'espera' || this.fase === 'resumen' || this.fase === 'semana' || this.dia !== c.dia)) {
       if (this.fase === 'semana') {
         this.cuentas = [];
-        this.gato.objeto.position.set(-0.78, this.escena.alto, -0.72);
+        this.escena.puestoGato(this.gato.objeto.position);
       }
       this.dia = c.dia;
       this.tDia = c.tDia;
@@ -363,7 +369,7 @@ export class MultiSystem extends OficinaSystem {
     this.resumenPintado = -1;
     sonidos.fin();
     this.escena.resumen.visible = true;
-    this.escena.siguiente.escribir(this.dia < JORNADAS.length - 1 ? 'Siguiente jornada' : 'Resumen de la semana');
+    this.escena.botonesResumen(this.modoResumen());
     const l = this.escena.lienzoResumen;
     l.limpiar();
     l.ctx.fillStyle = COLOR.crema;
@@ -607,7 +613,7 @@ export class MultiSystem extends OficinaSystem {
     this.cuenta.rechazadas++;
     if (this.filaLlena(i)) {
       sonidos.clic();
-      this.op({ tipo: 'chat', de: this.rol, texto: `Fila llena: no pudimos recibir ${CATEGORIAS[i].corto.toLowerCase()}`, cat: CATEGORIAS[i].id });
+      this.op({ tipo: 'chat', de: this.rol, texto: `${CATEGORIAS[i].corto}: categoría llena`, clave: 'llena', hora: this.hora() });
       this.gato.decir('Bien: esa fila estaba llena. Le avisé al despachador con un mensaje.');
     } else {
       this.cuenta.errores++;
@@ -659,8 +665,13 @@ export class MultiSystem extends OficinaSystem {
   protected conectarBotones(): void {
     super.conectarBotones();
     this.escena.siguiente.alPresionar = () => {
-      if (this.fase === 'resumen' || this.fase === 'semana') {
+      if ((this.fase === 'resumen' && this.dia < JORNADAS.length - 1) || this.fase === 'semana') {
         this.op({ tipo: 'siguiente' });
+      }
+    };
+    this.escena.finalizar.alPresionar = () => {
+      if (this.fase === 'resumen') {
+        this.op({ tipo: 'finalizar' });
       }
     };
   }

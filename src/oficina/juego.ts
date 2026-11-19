@@ -9,7 +9,8 @@
 //       fila (si hay menos de 30); si está dañado, a la caneca → ...
 //       llega un pedido con reloj → elegir el municipio → armar la
 //       caja desde la repisa → al camión → botón → ¿a tiempo?
-//   → resumen del día → siguiente jornada … → resumen de la semana.
+//   → resumen del día → Continuar (siguiente jornada) o Finalizar
+//   experiencia (resumen total y vuelta al inicio con el gato).
 //
 // Se agarra con el PUÑO y los botones se empujan con el ÍNDICE;
 // sin pellizco ni rayos (los punteros de IWSDK se apagan).
@@ -304,9 +305,8 @@ export class OficinaSystem extends createSystem({}) {
     const raiz = this.escena.raiz;
     raiz.position.set(this.cabeza.x, this.pisoY(), this.cabeza.z);
     raiz.rotation.set(0, Math.atan2(-this.frente.x, -this.frente.z), 0);
-    // Mesa flotante a la cintura: ~58 % de la altura de los ojos sobre el piso.
-    const alto = Math.min(1.0, Math.max(0.7, (this.cabeza.y - raiz.position.y) * 0.58));
-    this.escena.ajustarAltura(alto);
+    // Calibración de pie: todo se ajusta a la estatura (ver escena.ts).
+    const alto = this.escena.ajustarErgonomia(this.cabeza.y - raiz.position.y);
     raiz.updateWorldMatrix(true, true);
     // Ancla de WebXR: la oficina queda fija al cuarto real.
     const cuadro = this.world.xrFrame;
@@ -322,8 +322,8 @@ export class OficinaSystem extends createSystem({}) {
     sobre.scale.setScalar(0.02);
     this.anim.mover(sobre, null, 0.6, { escala: 1 });
     sonidos.pop();
-    // El gato a su puesto, al fondo del ala izquierda.
-    this.v.set(-0.78, alto, -0.72);
+    // El gato a su puesto, entre la estantería y el panel.
+    this.escena.puestoGato(this.v);
     this.anim.mover(this.gato.objeto, this.v, 0.8, { arco: 0.15 });
     this.gato.animar('quieto');
     if (!this.enXR()) {
@@ -338,6 +338,15 @@ export class OficinaSystem extends createSystem({}) {
     } else {
       this.trasColocar();
     }
+  }
+
+  /** Vuelve a medir la altura de los ojos (de pie) y reacomoda todo sin mover la oficina. */
+  protected recalibrar(): void {
+    this.leerCabeza();
+    this.escena.ajustarErgonomia(this.cabeza.y - this.escena.raiz.position.y);
+    this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.5, { arco: 0.08 });
+    sonidos.pop();
+    this.gato.decir('Listo: ajusté la mesa, la estantería y los paneles a tu estatura. Si no estabas de pie, párate derecho y vuelve a empujarlo.', 'Altura');
   }
 
   /** Qué pasa la primera vez que se coloca la oficina. */
@@ -841,7 +850,7 @@ export class OficinaSystem extends createSystem({}) {
     e.repisa.puesto(i, k, this.w);
     const destino = e.sobre.worldToLocal(e.repisa.grupo.localToWorld(this.w)).clone();
     this.anim.mover(oj.o.grupo, destino, 0.3, {
-      escala: ESCALA_REPISA,
+      escala: ESCALA_REPISA * e.repisa.grupo.scale.x,
       fin: () => {
         alFinal();
         this.quitarObjeto(oj);
@@ -1149,6 +1158,7 @@ export class OficinaSystem extends createSystem({}) {
       this.mostrarInicio();
       this.gato.decir('Párate donde quieras la oficina, mira al frente y empuja "Colocar aquí".');
     };
+    panel.recalibrar.alPresionar = () => this.recalibrar();
     panel.saltar.alPresionar = () => {
       this.tutorial = false;
       panel.saltar.activo = false;
@@ -1163,22 +1173,16 @@ export class OficinaSystem extends createSystem({}) {
       }
     };
     e.siguiente.alPresionar = () => {
-      if (this.fase === 'resumen') {
-        if (this.dia < JORNADAS.length - 1) {
-          this.dia++;
-          this.empezarJornada();
-        } else {
-          this.verSemana();
-        }
-      } else if (this.fase === 'semana') {
-        // Jugar de nuevo, sin tutorial.
-        this.dia = 0;
-        this.cuentas = [];
-        this.escena.repisa.fijar(CATEGORIAS.map((c) => INVENTARIO_INICIAL[c.id]));
-        this.gato.objeto.position.set(-0.78, this.escena.alto, -0.72);
+      if (this.fase === 'resumen' && this.dia < JORNADAS.length - 1) {
+        this.dia++;
         this.empezarJornada();
-        this.tutorial = false;
-        this.escena.panel.saltar.activo = false;
+      } else if (this.fase === 'semana') {
+        this.volverAlInicio();
+      }
+    };
+    e.finalizar.alPresionar = () => {
+      if (this.fase === 'resumen') {
+        this.verSemana();
       }
     };
   }
@@ -1260,6 +1264,16 @@ export class OficinaSystem extends createSystem({}) {
     return (this.cuentas[this.dia] ??= cuentaNueva());
   }
 
+  /** De vuelta al inicio, donde está el gato con "Colocar aquí" (sin repetir el tutorial). */
+  protected volverAlInicio(): void {
+    this.reiniciar();
+    this.tutorial = false;
+  }
+
+  protected modoResumen(): 'dia' | 'viernes' {
+    return this.dia < JORNADAS.length - 1 ? 'dia' : 'viernes';
+  }
+
   protected terminarJornada(): void {
     const c = this.cuenta;
     for (const p of this.pedidos) {
@@ -1274,7 +1288,7 @@ export class OficinaSystem extends createSystem({}) {
     this.escena.flecha.visible = false;
     this.pintarResumenDia();
     this.escena.resumen.visible = true;
-    this.escena.siguiente.escribir(this.dia < JORNADAS.length - 1 ? 'Siguiente jornada' : 'Resumen de la semana');
+    this.escena.botonesResumen(this.modoResumen());
     this.gato.animar('aplaudir', 2.5, this.tiempo);
     this.gato.decir(`¡Terminó el ${DIAS[this.dia].toLowerCase()}! Mira cómo te fue.`);
   }
@@ -1339,7 +1353,7 @@ export class OficinaSystem extends createSystem({}) {
     ctx.textAlign = 'center';
     ctx.fillStyle = COLOR.rojo;
     ctx.font = `900 66px ${FUENTE}`;
-    ctx.fillText('Resumen de la semana', l.ancho / 2, 90);
+    ctx.fillText('Resumen total', l.ancho / 2, 90);
     // Una columna por día: L M M J V.
     const ancho = (l.ancho - 160) / 5;
     let familias = 0;
@@ -1369,16 +1383,15 @@ export class OficinaSystem extends createSystem({}) {
     ctx.font = `400 33px ${FUENTE}`;
     lineas(ctx, MENSAJE_FINAL, l.ancho - 180).forEach((t, i) => ctx.fillText(t, l.ancho / 2, 570 + i * 44));
     l.listo();
-    this.escena.siguiente.escribir('Jugar de nuevo');
+    this.escena.botonesResumen('total');
     this.escena.resumen.visible = true;
     sonidos.logro();
-    // El gato al lado del tablero.
-    this.v.set(0.46, this.escena.alto, -0.55);
-    this.anim.mover(this.gato.objeto, this.v.clone(), 0.7, { arco: 0.12 });
+    // El gato se queda en su puesto, a un lado del tablero.
+    this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.7, { arco: 0.12 });
     this.gato.animar('saludar', 4, this.tiempo);
     this.gato.decir(
       'Así se gestiona una donación: se recibe, se revisa, se ordena y se despacha a quien la necesita. ¡Gracias por tu semana!',
-      '¡Semana cumplida!',
+      this.cuentas.length >= JORNADAS.length ? '¡Semana cumplida!' : '¡Buen trabajo!',
     );
   }
 

@@ -29,7 +29,14 @@ y el botón "Despachar".
   de madera, crema, clavos, Roboto 700, contador `n/30` y punto de estado); los productos son los
   modelos de la página simplificados (`public/models/ra/`); los botones son píldoras 3D con los
   colores del administrador (principal azul #1F5490, secundario crema, peligro rojo).
-- **Espacio:** la mesa flota a la cintura (~58 % de la altura de los ojos sobre el piso). El piso se
+- **Ergonomía (calibración de pie al colocar):** estatura ≈ altura de los ojos / 0,93. Mesa a la
+  altura del codo (0,63 × estatura) menos 7,5 cm; la estantería se achica si hace falta para que
+  sus filas queden entre la cadera y los hombros (nunca sobre los ojos); paneles a 70 cm con el
+  centro 12,5° bajo los ojos, mirando a la persona; lo que se agarra a 35–60 cm del pecho. Botón
+  "Recalibrar altura" en el menú bajo el panel (`ajustarErgonomia` en `escena.ts`).
+- **Fin de cada jornada:** "Continuar" (siguiente día) o "Finalizar experiencia" (resumen total y
+  "Volver al inicio", donde está el gato). El viernes solo "Finalizar experiencia".
+- **Espacio:** la mesa flota (sin patas). El piso se
   busca con los planos del visor y, si no hay, con hit-test (`SondaPiso` en `webxr.ts`); si nada
   responde se usa el piso del espacio de referencia. Mientras se escoge el lugar, el gato y
   "Colocar aquí" siguen la mirada. Al colocarla se fija con un ancla de WebXR.
@@ -56,9 +63,10 @@ y el botón "Despachar".
     está llena se rechaza. Abre cajas, clasifica a mano y surte la repisa. A la derecha, el panel de estado.
   - **Despachador:** pedidos con reloj en su computador, caja vacía infinita, camión y botón. Sin
     caneca (no clasifica) y sin teclado.
-  - **Mensajes** sobre el computador de los dos, solo con botones (sin texto libre): uno por
-    categoría con la foto de su producto ("Necesito …" el despachador, "Llegó …" el receptor) y uno
-    general ("¡Gracias!" / "¿Qué necesitas?").
+  - **Mensajes** a la izquierda del panel, solo con botones (sin texto libre): uno por categoría con
+    la foto de su producto (el otro recibe "Necesito [ícono] [categoría]") y cuatro fijos: "¡Hola!",
+    "Pedido urgente", "Categoría llena" y "Listo, enviado". Se ven los últimos 5, con ícono, sonido
+    de notificación y la hora del reloj del juego.
   - Archivos: `red.ts` (PeerJS), `compartido.ts` (estado y reglas, sin three.js), `multi.ts`
     (sistema), `multi-ui.ts` (teclado, chat, formulario, panel de estado, donantes).
   - Prueba en el computador: `?prueba&multi=crear&rol=despachador` en una pestaña (el código

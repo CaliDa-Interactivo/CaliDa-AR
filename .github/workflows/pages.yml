@@ -25,7 +25,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # Sin scripts de instalación: descargan herramientas de desarrollo que la
+      # compilación del sitio no necesita (y a veces fallan en GitHub).
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm run build
       - uses: actions/configure-pages@v5

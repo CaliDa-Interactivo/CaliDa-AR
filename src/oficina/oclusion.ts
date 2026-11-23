@@ -10,23 +10,35 @@
 //    como en la oficina aparecen objetos todo el tiempo (cajas,
 //    donaciones), aquí se parchan también los nuevos, y se corrige el
 //    factor de metros que dejaba la escena invisible en el Quest.
-//  · La mano real la recorta la profundidad del visor (a ras de la
-//    mano de verdad). La malla de la mano de IWSDK no se dibuja ni
-//    tapa nada: es genérica, no coincide con la mano real y dejaba una
-//    silueta gris corrida sobre los objetos.
+//  · La mano real tapa lo virtual con OclusorManos (abajo): una mano
+//    invisible armada con las articulaciones y radios reales que da
+//    WebXR. La malla de la mano de IWSDK no se dibuja ni tapa nada: es
+//    genérica, no coincide con la mano real y dejaba una silueta gris
+//    corrida sobre los objetos.
 //  · Los objetos no cambian de color cerca de la mano: solo se recortan
 //    donde la mano real está delante.
 //  · Lo que se lleva en la mano nunca se tapa (ver interaccion.ts).
 // ============================================================
 import {
+  BufferAttribute,
+  BufferGeometry,
+  CylinderGeometry,
   DepthSensingSystem,
+  DoubleSide,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
   MeshBasicMaterial,
+  Quaternion,
+  SphereGeometry,
+  Vector3,
   type Entity,
   type Material,
-  type Mesh,
   type Object3D,
   type World,
 } from '@iwsdk/core';
+import type { Mano } from './manos.js';
 
 /** La malla de la mano de IWSDK: no se dibuja (ni color ni profundidad). */
 const INVISIBLE = new MeshBasicMaterial({ visible: false });
@@ -191,4 +203,109 @@ export function ponerEncima(obj: Object3D, limpiador: Mesh): () => void {
     }
     materiales.forEach((transparente, mat) => (mat.transparent = transparente));
   };
+}
+
+// ---- Mano real que tapa lo virtual (sin depender de la profundidad) ----
+//
+// WebXR da la posición y el radio REAL de las 25 articulaciones de cada
+// mano. Con eso se arma, cada cuadro, una mano invisible ajustada a la
+// mano de verdad: una esfera por articulación, una cápsula por cada hueso
+// (con el grosor de sus articulaciones) y la palma rellena. No pinta
+// color, solo profundidad, y se dibuja antes que todo: lo virtual que
+// queda detrás de la mano real no se dibuja y se ve la mano (passthrough).
+
+/** Huesos (pares de articulaciones) que se cubren con una cápsula. */
+const HUESOS: [number, number][] = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8], [8, 9],
+  [0, 10], [10, 11], [11, 12], [12, 13], [13, 14],
+  [0, 15], [15, 16], [16, 17], [17, 18], [18, 19],
+  [0, 20], [20, 21], [21, 22], [22, 23], [23, 24],
+  // Nudillos unidos (el borde de la palma).
+  [6, 11], [11, 16], [16, 21],
+];
+/** Triángulos de la palma (índices de articulaciones). */
+const PALMA = [0, 5, 6, 0, 6, 11, 0, 11, 16, 0, 16, 21, 0, 21, 20, 1, 2, 5, 0, 1, 5];
+/** Un poco más que el radio medido, para cubrir el borde de la piel. */
+const MARGEN = 0.0015;
+const N_ART = 25;
+
+const MATERIAL_MANO = new MeshBasicMaterial({ colorWrite: false, side: DoubleSide });
+
+export class OclusorManos {
+  readonly grupo = new Group();
+  private esferas: InstancedMesh;
+  private capsulas: InstancedMesh;
+  private palmas: Mesh[] = [];
+  private m = new Matrix4();
+  private a = new Vector3();
+  private b = new Vector3();
+  private d = new Vector3();
+  private q = new Quaternion();
+  private s = new Vector3();
+  private arriba = new Vector3(0, 1, 0);
+
+  constructor() {
+    this.esferas = new InstancedMesh(new SphereGeometry(1, 12, 8), MATERIAL_MANO, N_ART * 2);
+    this.capsulas = new InstancedMesh(new CylinderGeometry(1, 1, 1, 10, 1, true), MATERIAL_MANO, HUESOS.length * 2);
+    for (const malla of [this.esferas, this.capsulas]) {
+      malla.renderOrder = -10;
+      malla.frustumCulled = false;
+      malla.count = 0;
+      this.grupo.add(malla);
+    }
+    for (let k = 0; k < 2; k++) {
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(new Float32Array(N_ART * 3), 3));
+      g.setIndex(PALMA);
+      const palma = new Mesh(g, MATERIAL_MANO);
+      palma.renderOrder = -10;
+      palma.frustumCulled = false;
+      palma.visible = false;
+      this.palmas.push(palma);
+      this.grupo.add(palma);
+    }
+  }
+
+  actualizar(manos: Mano[]): void {
+    let nE = 0;
+    let nC = 0;
+    manos.forEach((mano, k) => {
+      const palma = this.palmas[k];
+      if (!mano.conArticulaciones) {
+        palma.visible = false;
+        return;
+      }
+      const p = mano.articulaciones;
+      const r = mano.radios;
+      for (let i = 0; i < N_ART; i++) {
+        const radio = r[i] + MARGEN;
+        this.m.makeScale(radio, radio, radio).setPosition(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        this.esferas.setMatrixAt(nE++, this.m);
+      }
+      for (const [i, j] of HUESOS) {
+        this.a.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+        this.b.set(p[j * 3], p[j * 3 + 1], p[j * 3 + 2]);
+        this.d.subVectors(this.b, this.a);
+        const largo = this.d.length();
+        if (largo < 1e-4) {
+          continue;
+        }
+        const radio = Math.min(r[i], r[j]) + MARGEN;
+        this.q.setFromUnitVectors(this.arriba, this.d.multiplyScalar(1 / largo));
+        this.s.set(radio, largo, radio);
+        this.a.add(this.b).multiplyScalar(0.5);
+        this.m.compose(this.a, this.q, this.s);
+        this.capsulas.setMatrixAt(nC++, this.m);
+      }
+      const pos = palma.geometry.getAttribute('position') as BufferAttribute;
+      (pos.array as Float32Array).set(p);
+      pos.needsUpdate = true;
+      palma.visible = true;
+    });
+    this.esferas.count = nE;
+    this.capsulas.count = nC;
+    this.esferas.instanceMatrix.needsUpdate = true;
+    this.capsulas.instanceMatrix.needsUpdate = true;
+  }
 }

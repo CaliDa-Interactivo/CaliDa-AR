@@ -20,6 +20,35 @@ const ABRE = 0.035;
 
 export type TipoMano = 'mano' | 'control' | 'mouse';
 
+/** Las 25 articulaciones de WebXR, en su orden estándar. */
+export const ARTICULACIONES: XRHandJoint[] = [
+  'wrist',
+  'thumb-metacarpal',
+  'thumb-phalanx-proximal',
+  'thumb-phalanx-distal',
+  'thumb-tip',
+  'index-finger-metacarpal',
+  'index-finger-phalanx-proximal',
+  'index-finger-phalanx-intermediate',
+  'index-finger-phalanx-distal',
+  'index-finger-tip',
+  'middle-finger-metacarpal',
+  'middle-finger-phalanx-proximal',
+  'middle-finger-phalanx-intermediate',
+  'middle-finger-phalanx-distal',
+  'middle-finger-tip',
+  'ring-finger-metacarpal',
+  'ring-finger-phalanx-proximal',
+  'ring-finger-phalanx-intermediate',
+  'ring-finger-phalanx-distal',
+  'ring-finger-tip',
+  'pinky-finger-metacarpal',
+  'pinky-finger-phalanx-proximal',
+  'pinky-finger-phalanx-intermediate',
+  'pinky-finger-phalanx-distal',
+  'pinky-finger-tip',
+];
+
 export class Mano {
   presente = false;
   tipo: TipoMano = 'mano';
@@ -37,6 +66,11 @@ export class Mano {
   recienAbierta = false;
   /** Para vibrar con el control (las manos no vibran). */
   fuente: XRInputSource | null = null;
+  /** Las 25 articulaciones de la mano (x, y, z) y su radio real (oclusión de la mano). */
+  readonly articulaciones = new Float32Array(ARTICULACIONES.length * 3);
+  readonly radios = new Float32Array(ARTICULACIONES.length);
+  /** ¿Se leyeron todas las articulaciones en este cuadro? */
+  conArticulaciones = false;
 
   constructor(readonly lado: 'left' | 'right' | 'mouse') {}
 
@@ -83,6 +117,7 @@ export class Manos {
     for (const mano of this.lista) {
       if (!vistas.has(mano)) {
         mano.presente = false;
+        mano.conArticulaciones = false;
         mano.fijarCerrada(false);
       }
     }
@@ -123,6 +158,20 @@ export class Manos {
     const distancia = this.v.distanceTo(mano.indice);
     mano.agarre.copy(this.v).add(mano.indice).multiplyScalar(0.5);
     mano.fijarCerrada(mano.cerrada ? distancia < ABRE : distancia < CIERRA);
+    // Todas las articulaciones con su radio (para que la mano real tape lo virtual).
+    mano.conArticulaciones = true;
+    for (let i = 0; i < ARTICULACIONES.length; i++) {
+      const pj = pose(ARTICULACIONES[i]);
+      if (!pj) {
+        mano.conArticulaciones = false;
+        break;
+      }
+      const t = pj.transform.position;
+      mano.articulaciones[i * 3] = t.x;
+      mano.articulaciones[i * 3 + 1] = t.y;
+      mano.articulaciones[i * 3 + 2] = t.z;
+      mano.radios[i] = pj.radius ?? 0.008;
+    }
     return true;
   }
 
@@ -137,6 +186,7 @@ export class Manos {
     }
     const t = pose.transform;
     mano.tipo = 'control';
+    mano.conArticulaciones = false;
     mano.presente = true;
     mano.palma.set(t.position.x, t.position.y, t.position.z);
     mano.giro.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);

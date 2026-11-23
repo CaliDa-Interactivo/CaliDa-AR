@@ -57,7 +57,8 @@ import {
   mirarAlCentro,
 } from './escena.js';
 import { Interaccion, type Agarrable, type Destino } from './interaccion.js';
-import { Oclusion } from './oclusion.js';
+import { Oclusion, OclusorManos } from './oclusion.js';
+import { Diagnostico } from './diagnostico.js';
 import { Manos } from './manos.js';
 import { completo, cuentaNueva, estrellasDe, faltantes, type Aviso, type Cuenta, type Pedido } from './modelo.js';
 export { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
@@ -98,6 +99,9 @@ export class OficinaSystem extends createSystem({}) {
   /** El despachador no tiene caneca: no clasifica, solo despacha. */
   protected conCaneca = true;
   protected oclusion!: Oclusion;
+  /** La mano real tapa lo virtual (articulaciones de WebXR). */
+  protected oclusorManos = new OclusorManos();
+  protected diagnostico: Diagnostico | null = null;
   private girando = false;
   protected inicio = new Group();
   protected colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.055, BOTON.principal);
@@ -157,6 +161,16 @@ export class OficinaSystem extends createSystem({}) {
       // Sin el sistema de profundidad (?sinoclusion): no hay oclusión.
     }
     this.oclusion = new Oclusion(mundo, this.escena.raiz, this.raizEnt);
+    // Las articulaciones vienen en el espacio de referencia (el del jugador).
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('sinoclusormano')) {
+      this.player.add(this.oclusorManos.grupo);
+    }
+    // ?diagnostico: datos de la profundidad y de las manos frente a la vista.
+    if (params.has('diagnostico')) {
+      this.diagnostico = new Diagnostico(mundo, this.manos);
+      this.diagnostico.colgarDe(this.player.head);
+    }
     // Sin rayos ni agarres de IWSDK: pinza propia (pulgar e índice) y botones con el índice.
     for (const lado of ['left', 'right'] as const) {
       const mp = this.input.xr.multiPointers[lado];
@@ -1442,6 +1456,8 @@ export class OficinaSystem extends createSystem({}) {
     }
     this.leerCabeza();
     this.manos.actualizar(this.world.xrSession, this.world.xrFrame, this.world.xrReferenceSpace);
+    this.oclusorManos.actualizar(this.manos.lista);
+    this.diagnostico?.actualizar(dt);
     const cuadro = this.world.xrFrame;
     const espacio = this.world.xrReferenceSpace;
     if (this.ancla.activa && cuadro && espacio) {

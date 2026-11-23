@@ -62,7 +62,7 @@ import {
 import { Interaccion, type Agarrable, type Destino } from './interaccion.js';
 import { Oclusion, OclusorManos } from './oclusion.js';
 import { Diagnostico } from './diagnostico.js';
-import { DemoPinza } from './demo.js';
+import { DemoBoton, DemoPinza } from './demo.js';
 import { Manos } from './manos.js';
 import { completo, cuentaNueva, estrellasDe, faltantes, type Aviso, type Cuenta, type Pedido } from './modelo.js';
 export { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
@@ -109,8 +109,10 @@ export class OficinaSystem extends createSystem({}) {
   /** La mano real tapa lo virtual (articulaciones de WebXR). */
   protected oclusorManos = new OclusorManos();
   protected diagnostico: Diagnostico | null = null;
-  /** Ejemplo animado de la pinza, junto a "Colocar aquí". */
-  protected demo = new DemoPinza();
+  /** Ejemplo animado de cómo se presiona un botón (junto a "Colocar aquí"). */
+  protected demoBoton = new DemoBoton();
+  /** Ejemplo animado de la pinza (sobre la mesa, justo después de colocar la oficina). */
+  protected demoPinza = new DemoPinza();
   private girando = false;
   protected inicio = new Group();
   protected colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.055, BOTON.principal);
@@ -206,9 +208,13 @@ export class OficinaSystem extends createSystem({}) {
     tarima.scale.setScalar(0.6);
     tarima.position.set(-0.2, -0.36, -0.02);
     this.inicio.add(tarima);
-    // Ejemplo de cómo se agarra con la pinza, a la derecha del botón.
-    this.demo.grupo.position.set(0.24, -0.08, 0.02);
-    this.inicio.add(this.demo.grupo);
+    // Ejemplo de cómo se presiona (un botón de muestra), a la derecha del de verdad.
+    this.demoBoton.grupo.position.set(0.24, -0.01, 0.02);
+    this.inicio.add(this.demoBoton.grupo);
+    // Ejemplo de la pinza: aparece sobre la mesa al colocar la oficina.
+    this.demoPinza.grupo.position.set(0.24, 0, -0.29);
+    this.demoPinza.grupo.visible = false;
+    this.escena.sobre.add(this.demoPinza.grupo);
     this.escena.raiz.add(this.inicio);
     this.colocarBoton.alPresionar = () => this.colocar();
     this.gato = new Gato(mundo, this.raizEnt);
@@ -369,8 +375,25 @@ export class OficinaSystem extends createSystem({}) {
       this.fase = 'jornada';
       this.gato.decir('Listo, oficina en su nuevo lugar.');
     } else {
+      // Primera vez: el ejemplo de la pinza sobre la mesa, recién cargada.
+      this.demoPinza.reiniciar();
+      this.demoPinza.grupo.visible = true;
       this.trasColocar();
     }
+  }
+
+  /** El ejemplo de la pinza se ve unas vueltas o hasta que la persona agarra algo. */
+  protected ejemploPinza(dt: number): void {
+    const demo = this.demoPinza;
+    if (!demo.grupo.visible) {
+      return;
+    }
+    const agarro = [...this.manos.lista, this.inter.raton].some((m) => !!this.inter.lleva(m));
+    if (agarro || demo.vueltas >= 3 || (this.fase !== 'jornada' && (this.fase as string) !== 'espera')) {
+      demo.grupo.visible = false;
+      return;
+    }
+    demo.actualizar(dt);
   }
 
   /** Vuelve a medir la altura de los ojos (de pie) y reacomoda todo sin mover la oficina. */
@@ -1504,6 +1527,7 @@ export class OficinaSystem extends createSystem({}) {
     this.leerCabeza();
     this.manos.actualizar(this.world.xrSession, this.world.xrFrame, this.world.xrReferenceSpace);
     this.oclusorManos.actualizar(this.manos.lista);
+    this.ejemploPinza(dt);
     this.diagnostico?.actualizar(dt);
     const cuadro = this.world.xrFrame;
     const espacio = this.world.xrReferenceSpace;
@@ -1511,7 +1535,7 @@ export class OficinaSystem extends createSystem({}) {
       this.ancla.seguir(cuadro, espacio, this.escena.raiz);
     }
     if ((this.fase === 'inicio' || this.fase === 'colocar') && this.inicio.visible) {
-      this.demo.actualizar(dt);
+      this.demoBoton.actualizar(dt);
       this.sonda.actualizar(this.world.xrSession, cuadro, espacio, this.cabeza.y);
       this.seguirMirada(dt);
     }

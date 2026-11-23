@@ -66,9 +66,12 @@ mundo.then(async (world) => {
     registrado = true;
     // Oclusión con la profundidad real (Quest 3): manos y objetos reales tapan
     // lo virtual con un borde suave. Si el visor no la da, no hace nada.
-    world.registerSystem(DepthSensingSystem, {
-      configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 8 },
-    });
+    // ?sinoclusion la apaga (interruptor de emergencia para probar en las gafas).
+    if (!parametros.has('sinoclusion')) {
+      world.registerSystem(DepthSensingSystem, {
+        configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: true, blurRadius: 8 },
+      });
+    }
     world.registerSystem(sistema === 'multi' ? MultiSystem : OficinaSystem);
   };
   let puedeRA = false;

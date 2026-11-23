@@ -21,7 +21,7 @@
         "depthSensing": {
           "required": false,
           "usage": "gpu-optimized",
-          "format": "luminance-alpha"
+          "format": "float32"
         }
       }
     },

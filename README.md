@@ -100,6 +100,9 @@ npm run build            # compila a dist/
 npm run prueba:compartido  # pruebas de las reglas del multijugador (node)
 ```
 
+Si en las gafas no se ve nada virtual, abre el enlace con `?sinoclusion` al final
+(https://calida-interactivo.github.io/CaliDa-AR/?sinoclusion): apaga la oclusión por profundidad.
+
 Modo prueba con el mouse: `?prueba` (un jugador), `?prueba&multi=crear&rol=despachador` y
 `?prueba&multi=unir&sala=CÓDIGO`. Para el multijugador usa **dos ventanas lado a lado** (no pestañas:
 la de atrás se congela).

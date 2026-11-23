@@ -154,7 +154,7 @@ export class OficinaSystem extends createSystem({}) {
       // escena invisible dentro de la sesión: no usarlo.
       this.raizEnt.addComponent(DepthOccludable, { mode: OcclusionShadersMode.SoftOcclusion });
     } catch {
-      // Sin el sistema de profundidad registrado: queda la mano como oclusor.
+      // Sin el sistema de profundidad (?sinoclusion): no hay oclusión.
     }
     this.oclusion = new Oclusion(mundo, this.escena.raiz, this.raizEnt);
     // Sin rayos ni agarres de IWSDK: pinza propia (pulgar e índice) y botones con el índice.

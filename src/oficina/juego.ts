@@ -42,7 +42,10 @@ import {
   MENSAJE_FINAL,
   PESO_CATEGORIA,
   subAlAzar,
+  idProducto,
   indiceCategoria,
+  nombreProducto,
+  pedirPorProducto,
   type IdCategoria,
 } from './datos.js';
 import {
@@ -59,6 +62,7 @@ import {
 import { Interaccion, type Agarrable, type Destino } from './interaccion.js';
 import { Oclusion, OclusorManos } from './oclusion.js';
 import { Diagnostico } from './diagnostico.js';
+import { DemoPinza } from './demo.js';
 import { Manos } from './manos.js';
 import { completo, cuentaNueva, estrellasDe, faltantes, type Aviso, type Cuenta, type Pedido } from './modelo.js';
 export { cuentaNueva, estrellasDe, type Cuenta } from './modelo.js';
@@ -83,6 +87,9 @@ export interface ObjetoJuego {
   ag: Agarrable;
 }
 
+/** Escala de la caja del pedido adentro del furgón (para que quepa por la puerta). */
+const ESCALA_CAJA_CAMION = 0.6;
+
 const nombre = (id: IdCategoria) => CATEGORIAS.find((c) => c.id === id)!.corto;
 const dxz = (a: Vector3, b: Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -102,6 +109,8 @@ export class OficinaSystem extends createSystem({}) {
   /** La mano real tapa lo virtual (articulaciones de WebXR). */
   protected oclusorManos = new OclusorManos();
   protected diagnostico: Diagnostico | null = null;
+  /** Ejemplo animado de la pinza, junto a "Colocar aquí". */
+  protected demo = new DemoPinza();
   private girando = false;
   protected inicio = new Group();
   protected colocarBoton = new Boton3D('Colocar aquí', 0.17, 0.055, BOTON.principal);
@@ -132,6 +141,8 @@ export class OficinaSystem extends createSystem({}) {
   // Caja del pedido y camión
   protected cajaPedido!: CajaArmada;
   protected cajaEnCamion = false;
+  /** La caja va entrando al furgón (las puertas siguen abiertas). */
+  protected cargando = false;
   protected minisPedido: Group[] = [];
   protected camion: 'listo' | 'yendo' | 'fuera' | 'volviendo' = 'listo';
   /** Despachador (multijugador): al llevar la caja al camión aparece otra. */
@@ -195,6 +206,9 @@ export class OficinaSystem extends createSystem({}) {
     tarima.scale.setScalar(0.6);
     tarima.position.set(-0.2, -0.36, -0.02);
     this.inicio.add(tarima);
+    // Ejemplo de cómo se agarra con la pinza, a la derecha del botón.
+    this.demo.grupo.position.set(0.24, -0.08, 0.02);
+    this.inicio.add(this.demo.grupo);
     this.escena.raiz.add(this.inicio);
     this.colocarBoton.alPresionar = () => this.colocar();
     this.gato = new Gato(mundo, this.raizEnt);
@@ -471,7 +485,7 @@ export class OficinaSystem extends createSystem({}) {
         const p: Pedido = {
           id: this.idAviso + 1,
           municipio: e.municipio,
-          pide: { ...e.pide },
+          pide: pedirPorProducto(e.pide, this.dia * 31 + this.siguienteEvento),
           lleva: {},
           plazo: e.plazo,
           restante: e.plazo,
@@ -696,6 +710,8 @@ export class OficinaSystem extends createSystem({}) {
     const abierta: Agarrable = {
       obj: new Group(),
       palmaLibre: true,
+      // La pinza entra por arriba de la caja abierta: un poco más de alcance.
+      alcance: 0.07,
       activo: () => this.fase === 'jornada' && this.trabajo?.estado === 'abierta' && this.trabajo.objetos.length > 0,
       tomar: (mano) => {
         const caja = this.trabajo!;
@@ -731,6 +747,8 @@ export class OficinaSystem extends createSystem({}) {
       const resalte = { poner: (c: string | null) => e.repisa.marcar(i, c) };
       const fila: Agarrable = {
         obj: zona,
+        // Hay que meter la pinza en el compartimiento (no basta con acercarla).
+        alcance: 0.008,
         activo: () => this.fase === 'jornada' && e.repisa.cantidades[i] > 0,
         tomar: (mano) => {
           // Del producto (columna) donde está la mano.
@@ -756,12 +774,26 @@ export class OficinaSystem extends createSystem({}) {
       obj: this.cajaPedido.raiz,
       activo: () => this.fase === 'jornada' && !this.cajaEnCamion && this.camion === 'listo' && !!this.enCurso(),
       tomar: () => this.cajaPedido.raiz,
-      destino: (obj) => (dxz(obj.position, e.plataforma(this.w)) < 0.16 ? 'valido' : null),
+      destino: (obj) => (this.cercaDelCamion(obj) ? 'valido' : null),
       soltar: (obj) => {
-        if (dxz(obj.position, e.plataforma(this.w)) < 0.16) {
+        if (this.cercaDelCamion(obj)) {
           this.cajaEnCamion = true;
-          this.anim.mover(obj, e.plataforma(this.w).clone().setY(this.w.y + 0.005), 0.25, {
-            fin: () => e.camion.attach(obj),
+          this.cargando = true;
+          // Entra por las puertas traseras ya cerrada (con su tapa): primero a la
+          // entrada (alineada con el camión y más pequeña para caber) y después
+          // adentro, sin atravesar el furgón.
+          obj.quaternion.copy(e.camion.quaternion);
+          this.cajaPedido.solapas.visible = false;
+          this.cajaPedido.tapa.visible = true;
+          this.anim.mover(obj, e.entradaCamion(this.w).clone().setY(this.w.y + 0.01), 0.25, {
+            escala: ESCALA_CAJA_CAMION,
+            fin: () =>
+              this.anim.mover(obj, e.plataforma(this.w).clone().setY(this.w.y + 0.004), 0.35, {
+                fin: () => {
+                  e.camion.attach(obj);
+                  this.cargando = false;
+                },
+              }),
           });
           this.pista('despachar', '¡Caja en el camión! Ahora empuja el botón rojo "Despachar".', e.botonDespacho.grupo.position);
         } else {
@@ -770,6 +802,12 @@ export class OficinaSystem extends createSystem({}) {
       },
     };
     this.inter.agarrables.push(pedido);
+  }
+
+  /** ¿La caja del pedido está en la puerta trasera del camión? */
+  protected cercaDelCamion(obj: Object3D): boolean {
+    const e = this.escena;
+    return dxz(obj.position, e.entradaCamion(this.w)) < 0.18 || dxz(obj.position, e.plataforma(this.w)) < 0.12;
   }
 
   protected deGrupo(obj: Object3D): ObjetoJuego {
@@ -789,7 +827,8 @@ export class OficinaSystem extends createSystem({}) {
       resultado = 'valido';
     } else if (this.sobreCajaPedido(p)) {
       const ped = this.enCurso();
-      resultado = ped && (ped.pide[oj.o.cat] ?? 0) > (ped.lleva[oj.o.cat] ?? 0) ? 'valido' : 'invalido';
+      const id = idProducto(oj.o.cat, oj.o.sub);
+      resultado = ped && (ped.pide[id] ?? 0) > (ped.lleva[id] ?? 0) ? 'valido' : 'invalido';
     } else {
       const k = e.repisa.categoriaEn(e.repisa.grupo.worldToLocal(e.sobre.localToWorld(this.v.copy(p))));
       if (k >= 0) {
@@ -974,21 +1013,29 @@ export class OficinaSystem extends createSystem({}) {
     caja.rotation.set(0, 0, 0);
     caja.scale.setScalar(ESCALA_CAJA);
     caja.visible = true;
+    this.cajaPedido.solapas.visible = true;
+    this.cajaPedido.tapa.visible = false;
     this.cajaEnCamion = false;
+    this.cargando = false;
   }
 
   protected aPedido(oj: ObjetoJuego): void {
     const p = this.enCurso();
     const cat = oj.o.cat;
-    if (!p || (p.pide[cat] ?? 0) <= (p.lleva[cat] ?? 0)) {
+    const id = idProducto(cat, oj.o.sub);
+    if (!p || (p.pide[id] ?? 0) <= (p.lleva[id] ?? 0)) {
       sonidos.error();
-      this.gato.decir(p ? `El pedido de ${p.municipio} no necesita más ${nombre(cat).toLowerCase()}.` : 'Primero acepta un pedido en el panel.');
+      this.gato.decir(
+        p
+          ? `El pedido de ${p.municipio} no necesita ${nombreProducto(id).toLowerCase()}. Pide: ${textoPedido(p, false)}.`
+          : 'Primero acepta un pedido en el panel.',
+      );
       this.devolver(oj);
       return;
     }
     oj.o.clasificado = true;
     this.quitarAgarrable(oj.ag);
-    p.lleva[cat] = (p.lleva[cat] ?? 0) + 1;
+    p.lleva[id] = (p.lleva[id] ?? 0) + 1;
     if (oj.o.danado) {
       (p as Pedido & { quejas?: number }).quejas = ((p as Pedido & { quejas?: number }).quejas ?? 0) + 1;
     }
@@ -999,7 +1046,7 @@ export class OficinaSystem extends createSystem({}) {
       escala: 0.6,
       fin: () => {
         this.quitarObjeto(oj);
-        const mini = new Objeto(cat, oj.o.danado).grupo;
+        const mini = new Objeto(cat, oj.o.danado, oj.o.sub).grupo;
         mini.children.forEach((c) => {
           if (c.userData.mirar) {
             c.visible = false;
@@ -1026,7 +1073,7 @@ export class OficinaSystem extends createSystem({}) {
     if (!p) {
       return this.pedidos.some((x) => x.estado === 'elegir') ? 'Elige el municipio en el panel' : 'No hay pedido en curso';
     }
-    const falta = faltantes(p, nombre);
+    const falta = faltantes(p, nombreProducto);
     if (falta.length) {
       return `Falta: ${falta.join(', ')}`;
     }
@@ -1464,6 +1511,7 @@ export class OficinaSystem extends createSystem({}) {
       this.ancla.seguir(cuadro, espacio, this.escena.raiz);
     }
     if ((this.fase === 'inicio' || this.fase === 'colocar') && this.inicio.visible) {
+      this.demo.actualizar(dt);
       this.sonda.actualizar(this.world.xrSession, cuadro, espacio, this.cabeza.y);
       this.seguirMirada(dt);
     }
@@ -1502,6 +1550,9 @@ export class OficinaSystem extends createSystem({}) {
     }
     this.avanzarPedidos(dt);
     this.moverCamion(dt);
+    // Puertas traseras: se abren mientras se lleva la caja del pedido o mientras entra.
+    const conCaja = [...this.manos.lista, this.inter.raton].some((m) => this.inter.lleva(m) === this.cajaPedido.raiz);
+    this.escena.puertasCamion(this.camion === 'listo' && (conCaja || this.cargando), dt);
     // ¿Terminó la jornada?
     const eventos = JORNADAS[this.dia].eventos;
     const sinNada =

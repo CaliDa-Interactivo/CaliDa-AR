@@ -104,6 +104,41 @@ export const categoriaDe = (id: IdCategoria): Categoria => CATEGORIAS[indiceCate
 /** Un producto al azar de la categoría (índice en `subs`). */
 export const subAlAzar = (id: IdCategoria): number => Math.floor(Math.random() * categoriaDe(id).subs.length);
 
+/** Id del producto (subcategoría), p. ej. 'aseo-bucal'. */
+export const idProducto = (cat: IdCategoria, sub: number): string =>
+  (categoriaDe(cat).subs[sub] ?? categoriaDe(cat).subs[0]).id;
+
+/** Categoría, índice y datos de un producto por su id. */
+export function productoPorId(id: string): { cat: IdCategoria; sub: number; producto: Producto } {
+  for (const c of CATEGORIAS) {
+    const sub = c.subs.findIndex((p) => p.id === id);
+    if (sub >= 0) {
+      return { cat: c.id, sub, producto: c.subs[sub] };
+    }
+  }
+  return { cat: CATEGORIAS[0].id, sub: 0, producto: CATEGORIAS[0].subs[0] };
+}
+
+/** Nombre de un producto (subcategoría): "Higiene bucal". */
+export const nombreProducto = (id: string): string => productoPorId(id).producto.nombre;
+
+/**
+ * Las jornadas piden por categoría; el pedido real nombra la subcategoría
+ * ("2 Higiene bucal" en vez de "2 aseo"). Se elige de forma fija según
+ * `semilla` para que cada pedido sea siempre el mismo.
+ */
+export function pedirPorProducto(pide: Partial<Record<IdCategoria, number>>, semilla: number): Record<string, number> {
+  const salida: Record<string, number> = {};
+  let k = 0;
+  for (const [cat, n] of Object.entries(pide) as [IdCategoria, number][]) {
+    const subs = categoriaDe(cat).subs;
+    const sub = Math.abs(semilla * 7 + k * 3 + cat.length) % subs.length;
+    salida[subs[sub].id] = (salida[subs[sub].id] ?? 0) + n;
+    k++;
+  }
+  return salida;
+}
+
 /** Tope de cada categoría en la repisa (2 líneas × 15 puestos). */
 export const TOPE = 30;
 export const ALERTA = 25;

@@ -6,9 +6,10 @@ export type TipoAviso = 'cajas' | 'pedido' | 'alerta' | 'entrega';
 export interface Pedido {
   id: number;
   municipio: string;
-  pide: Partial<Record<IdCategoria, number>>;
-  /** Lo que ya va en la caja del pedido. */
-  lleva: Partial<Record<IdCategoria, number>>;
+  /** Lo que pide, por producto (subcategoría): { 'aseo-bucal': 2 }. */
+  pide: Record<string, number>;
+  /** Lo que ya va en la caja del pedido (por producto). */
+  lleva: Record<string, number>;
   plazo: number;
   /** Segundos que le quedan al reloj (negativo: ya se pasó). */
   restante: number;
@@ -34,9 +35,9 @@ export interface Aviso {
 }
 
 /** Lo que falta para completar un pedido, en texto. */
-export function faltantes(p: Pedido, nombres: (id: IdCategoria) => string): string[] {
+export function faltantes(p: Pedido, nombres: (id: string) => string): string[] {
   const salida: string[] = [];
-  for (const [id, n] of Object.entries(p.pide) as [IdCategoria, number][]) {
+  for (const [id, n] of Object.entries(p.pide)) {
     const lleva = p.lleva[id] ?? 0;
     if (lleva < n) {
       salida.push(`${nombres(id)} ${n - lleva}`);
@@ -46,7 +47,7 @@ export function faltantes(p: Pedido, nombres: (id: IdCategoria) => string): stri
 }
 
 export function completo(p: Pedido): boolean {
-  return (Object.entries(p.pide) as [IdCategoria, number][]).every(([id, n]) => (p.lleva[id] ?? 0) >= n);
+  return Object.entries(p.pide).every(([id, n]) => (p.lleva[id] ?? 0) >= n);
 }
 
 // ---- Cuenta de cada jornada --------------------------------------

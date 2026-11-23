@@ -20,6 +20,7 @@
 //  · Lo que se lleva en la mano nunca se tapa (ver interaccion.ts).
 // ============================================================
 import {
+  BackSide,
   BufferAttribute,
   BufferGeometry,
   CylinderGeometry,
@@ -226,13 +227,27 @@ const HUESOS: [number, number][] = [
 ];
 /** Triángulos de la palma (índices de articulaciones). */
 const PALMA = [0, 5, 6, 0, 6, 11, 0, 11, 16, 0, 16, 21, 0, 21, 20, 1, 2, 5, 0, 1, 5];
-/** Un poco más que el radio medido, para cubrir el borde de la piel. */
-const MARGEN = 0.0015;
 const N_ART = 25;
 
-const MATERIAL_MANO = new MeshBasicMaterial({ colorWrite: false, side: DoubleSide });
+/** Lo que se dibuja de una mano: posiciones (25 × xyz) y radios de sus articulaciones. */
+export interface DatosMano {
+  articulaciones: Float32Array;
+  radios: Float32Array;
+}
 
-export class OclusorManos {
+export interface OpcionesPiezas {
+  material: Material;
+  /** Lo que se suma al radio real (m). */
+  margen: number;
+  orden: number;
+  /** Rellenar la palma (para tapar). */
+  palma: boolean;
+  /** Solo contorno: sin la muñeca ni sus huesos (la línea se desvanece hacia el brazo). */
+  contorno: boolean;
+}
+
+/** Esferas, cápsulas y palma de una o dos manos (para tapar, dibujar o contornear). */
+export class PiezasMano {
   readonly grupo = new Group();
   private esferas: InstancedMesh;
   private capsulas: InstancedMesh;
@@ -245,45 +260,57 @@ export class OclusorManos {
   private s = new Vector3();
   private arriba = new Vector3(0, 1, 0);
 
-  constructor() {
-    this.esferas = new InstancedMesh(new SphereGeometry(1, 12, 8), MATERIAL_MANO, N_ART * 2);
-    this.capsulas = new InstancedMesh(new CylinderGeometry(1, 1, 1, 10, 1, true), MATERIAL_MANO, HUESOS.length * 2);
+  constructor(private op: OpcionesPiezas) {
+    this.esferas = new InstancedMesh(new SphereGeometry(1, 14, 10), op.material, N_ART * 2);
+    this.capsulas = new InstancedMesh(new CylinderGeometry(1, 1, 1, 12, 1, true), op.material, HUESOS.length * 2);
     for (const malla of [this.esferas, this.capsulas]) {
-      malla.renderOrder = -10;
+      malla.renderOrder = op.orden;
       malla.frustumCulled = false;
       malla.count = 0;
+      malla.userData.sinContorno = true;
       this.grupo.add(malla);
     }
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < 2 && op.palma; k++) {
       const g = new BufferGeometry();
       g.setAttribute('position', new BufferAttribute(new Float32Array(N_ART * 3), 3));
       g.setIndex(PALMA);
-      const palma = new Mesh(g, MATERIAL_MANO);
-      palma.renderOrder = -10;
+      const palma = new Mesh(g, op.material);
+      palma.renderOrder = op.orden;
       palma.frustumCulled = false;
       palma.visible = false;
+      palma.userData.sinContorno = true;
       this.palmas.push(palma);
       this.grupo.add(palma);
     }
   }
 
-  actualizar(manos: Mano[]): void {
+  /** `manos[k]` null = esa mano no está. */
+  actualizar(manos: (DatosMano | null)[]): void {
     let nE = 0;
     let nC = 0;
+    const margen = this.op.margen;
     manos.forEach((mano, k) => {
       const palma = this.palmas[k];
-      if (!mano.conArticulaciones) {
-        palma.visible = false;
+      if (!mano) {
+        if (palma) {
+          palma.visible = false;
+        }
         return;
       }
       const p = mano.articulaciones;
       const r = mano.radios;
       for (let i = 0; i < N_ART; i++) {
-        const radio = r[i] + MARGEN;
+        if (this.op.contorno && SIN_CONTORNO.has(i)) {
+          continue;
+        }
+        const radio = r[i] + margen;
         this.m.makeScale(radio, radio, radio).setPosition(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
         this.esferas.setMatrixAt(nE++, this.m);
       }
       for (const [i, j] of HUESOS) {
+        if (this.op.contorno && i === 0) {
+          continue;
+        }
         this.a.set(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
         this.b.set(p[j * 3], p[j * 3 + 1], p[j * 3 + 2]);
         this.d.subVectors(this.b, this.a);
@@ -291,21 +318,62 @@ export class OclusorManos {
         if (largo < 1e-4) {
           continue;
         }
-        const radio = Math.min(r[i], r[j]) + MARGEN;
+        const radio = Math.min(r[i], r[j]) + margen;
         this.q.setFromUnitVectors(this.arriba, this.d.multiplyScalar(1 / largo));
         this.s.set(radio, largo, radio);
         this.a.add(this.b).multiplyScalar(0.5);
         this.m.compose(this.a, this.q, this.s);
         this.capsulas.setMatrixAt(nC++, this.m);
       }
-      const pos = palma.geometry.getAttribute('position') as BufferAttribute;
-      (pos.array as Float32Array).set(p);
-      pos.needsUpdate = true;
-      palma.visible = true;
+      if (palma) {
+        const pos = palma.geometry.getAttribute('position') as BufferAttribute;
+        (pos.array as Float32Array).set(p);
+        pos.needsUpdate = true;
+        palma.visible = true;
+      }
     });
     this.esferas.count = nE;
     this.capsulas.count = nC;
     this.esferas.instanceMatrix.needsUpdate = true;
     this.capsulas.instanceMatrix.needsUpdate = true;
+  }
+}
+
+/** La muñeca y la base de los dedos no llevan línea (se desvanece hacia el brazo, como en el Quest). */
+const SIN_CONTORNO = new Set([0, 1, 5, 10, 15, 20]);
+
+/** No pinta color, solo profundidad: tapa lo virtual que queda detrás. */
+const MATERIAL_TAPA = new MeshBasicMaterial({ colorWrite: false, side: DoubleSide });
+/** Línea blanca fina alrededor de la mano (como la de las manos del Quest). */
+export const MATERIAL_LINEA = new MeshBasicMaterial({
+  color: '#FFFFFF',
+  side: BackSide,
+  transparent: true,
+  opacity: 0.9,
+  depthWrite: false,
+  toneMapped: false,
+});
+/** Grosor de la línea blanca (m). */
+export const GROSOR_LINEA = 0.0022;
+
+/**
+ * La mano real tapa lo virtual a ras (radio real, sin margen) y lleva una
+ * línea blanca fina alrededor. No se dibuja nada más de la mano: se ve la
+ * mano real (passthrough).
+ */
+export class OclusorManos {
+  readonly grupo = new Group();
+  private tapa = new PiezasMano({ material: MATERIAL_TAPA, margen: 0, orden: -10, palma: true, contorno: false });
+  private linea = new PiezasMano({ material: MATERIAL_LINEA, margen: GROSOR_LINEA, orden: -9, palma: false, contorno: true });
+  private datos: (DatosMano | null)[] = [null, null];
+
+  constructor() {
+    this.grupo.add(this.tapa.grupo, this.linea.grupo);
+  }
+
+  actualizar(manos: Mano[]): void {
+    manos.forEach((mano, k) => (this.datos[k] = mano.conArticulaciones ? mano : null));
+    this.tapa.actualizar(this.datos);
+    this.linea.actualizar(this.datos);
   }
 }

@@ -9,7 +9,7 @@
 // Cauca; se elige presionando con el dedo.
 // ============================================================
 import { Group } from '@iwsdk/core';
-import { CATEGORIAS, COLOR, MUNICIPIOS, type IdCategoria } from './datos.js';
+import { CATEGORIAS, COLOR, MUNICIPIOS, nombreProducto, type IdCategoria } from './datos.js';
 import type { Aviso, Pedido } from './modelo.js';
 import { BOTON, Boton3D, FUENTE, Lienzo, fondoPanel, lineas, rect, textoAjustado } from './ui.js';
 
@@ -30,12 +30,11 @@ const ESTILO: Record<string, { fondo: string; texto: string; titulo: string }> =
   entrega: { fondo: COLOR.verde, texto: '#FFFFFF', titulo: 'ENTREGADO' },
 };
 
-const corto = (id: IdCategoria) => CATEGORIAS.find((c) => c.id === id)!.corto;
 
-/** "Agua 1/2 · Cobijas 0/3" */
+/** "Higiene bucal 1/2 · Agua 0/3" (por producto, no por categoría). */
 export function textoPedido(p: Pedido, conLleva: boolean): string {
-  return (Object.entries(p.pide) as [IdCategoria, number][])
-    .map(([id, n]) => (conLleva ? `${corto(id)} ${p.lleva[id] ?? 0}/${n}` : `${n} ${corto(id).toLowerCase()}`))
+  return Object.entries(p.pide)
+    .map(([id, n]) => (conLleva ? `${nombreProducto(id)} ${p.lleva[id] ?? 0}/${n}` : `${n} ${nombreProducto(id).toLowerCase()}`))
     .join(conLleva ? ' · ' : ' y ');
 }
 

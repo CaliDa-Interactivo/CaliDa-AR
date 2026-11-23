@@ -28,7 +28,7 @@ Con **pinza** y sin rayos: todo con las manos.
 
 | Acción | Cómo |
 | --- | --- |
-| Resaltar un objeto (hover) | Acerca la pinza (pulgar e índice) a menos de 5 cm: contorno blanco |
+| Resaltar un objeto (hover) | Acerca la pinza (pulgar e índice) a menos de 5 cm: contorno blanco. Solo se agarra lo que está resaltado; en la estantería hay que meter la pinza en el compartimiento |
 | Agarrar | Junta el **pulgar y el índice** (menos de 1,8 cm) |
 | Soltar | Separa los dedos (más de 3,5 cm). Encaja en un puesto válido (verde) o cae a la mesa o al piso |
 | Botones | Empújalos con la **punta del índice**: se hunden hasta 1,5 cm |
@@ -40,11 +40,14 @@ Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Salt
 ## El juego
 
 - **Oficina en U** flotante (sin patas): a la izquierda el panel de avisos en la pantalla de un
-  monitor; al frente una **góndola de supermercado** con una bandeja por categoría (tope 30, alerta
-  en 25), los productos grandes, de frente y en fila (primero adelante y después hacia atrás), sus
-  etiquetas en el riel y las placas de las categorías a la izquierda; el gato encima con el reloj, la
-  caneca de descarte justo a la izquierda de la góndola, la pila de cajas (máx. 8), la zona de
-  trabajo y la caja del pedido; a la derecha el camión de la Cruz Roja y el botón **Despachar**.
+  monitor; al frente la **estantería de madera de la página** (5 categorías, tope 30, alerta en 25)
+  con los productos grandes (de a dos apilados al frente y el resto hacia atrás), el gato encima con
+  el reloj y la caneca de descarte a su izquierda, hacia el frente; la pila de cajas (máx. 8), la
+  zona de trabajo y la caja del pedido; a la derecha el camión de la Cruz Roja (la caja entra por
+  sus puertas traseras) y el botón **Despachar**.
+- **Antes de empezar**, junto a "Colocar aquí", una mano de ejemplo muestra cómo se agarra con la
+  pinza. Las manos reales se ven tal cual, con una línea blanca fina alrededor (como en el Quest).
+- **Pedidos por producto** (subcategoría): "2 higiene bucal", "1 agua"…; solo vale ese producto.
 - **Oclusión:** la mano real tapa lo virtual a ras: una mano invisible con las articulaciones y radios reales de WebXR;
   la malla genérica de la mano no se dibuja, así los objetos no cambian de color ni de forma.
 - **Flujo:** campana → aviso → llegan cajas → quitar la tapa → revisar cada objeto a mano (contorno

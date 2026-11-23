@@ -3,9 +3,9 @@
 // alrededor del jugador (que está en el origen, mirando a -Z):
 //
 //   · Izquierda: el panel de avisos (en el monitor del computador).
-//   · Frente: la góndola de 5 categorías con el gato encima y la caneca
-//     de descarte a su izquierda; delante, la pila de cajas, la zona de
-//     trabajo y la caja del pedido.
+//   · Frente: la estantería de la página (5 categorías) con el gato encima
+//     y la caneca de descarte a su izquierda, hacia el frente; delante, la
+//     pila de cajas, la zona de trabajo y la caja del pedido.
 //   · Derecha: el camión de la Cruz Roja y el botón de despacho.
 //
 // Todo lo que va sobre las mesas cuelga de `sobre`, cuyo y = 0 es
@@ -14,8 +14,8 @@
 //
 // Ergonomía (se calibra al colocar, de pie): estatura ≈ ojos / 0,93.
 //   · Mesa: codo (0,63 × estatura) menos 7,5 cm.
-//   · Góndola: sobre la mesa (sobre la cadera); la bandeja de arriba bajo
-//     la línea de los ojos. Se achica como mucho al 80 % (productos grandes).
+//   · Estantería: sobre la mesa (sobre la cadera); la fila de arriba bajo
+//     la línea de los ojos. Se achica como mucho al 75 % (productos grandes).
 //   · Paneles: a 70 cm, el centro 12,5° por debajo de los ojos y
 //     mirando a la persona.
 //   · Lo que se agarra, a 35–60 cm del pecho (la persona está en el
@@ -32,10 +32,10 @@ import {
   Vector3,
   type Object3D,
 } from '@iwsdk/core';
-import { PLATAFORMA, crearCamion, crearMonitor, sombra } from './objetos.js';
+import { ENTRADA, PLATAFORMA, crearCamion, crearMonitor, sombra } from './objetos.js';
 import { COLOR } from './datos.js';
 import { ALTO_PANEL, ANCHO_PANEL, Panel } from './panel.js';
-import { ALTO_REPISA, ANCHO_REPISA, Repisa } from './repisa.js';
+import { ALTO_REPISA, Repisa } from './repisa.js';
 import { BOTON, Boton3D, Lienzo } from './ui.js';
 
 const mate = (color: string) => new MeshStandardMaterial({ color, roughness: 0.88 });
@@ -50,18 +50,18 @@ const MESAS: [number, number, number, number][] = [
 export const PILA = [new Vector3(-0.33, 0, -0.4), new Vector3(-0.14, 0, -0.4)];
 export const TRABAJO = new Vector3(0.1, 0, -0.41);
 export const PEDIDO = new Vector3(0.4, 0, -0.41);
-/** Caneca de descarte: justo al lado izquierdo de la góndola. */
-export const CANECA = new Vector3(-ANCHO_REPISA / 2 - 0.075, 0, -0.6);
+/** Caneca de descarte: a la izquierda de la estantería, hacia el frente (cerca de la persona). */
+export const CANECA = new Vector3(-0.62, 0, -0.42);
 export const ESCALA_CAJA = 0.7;
 /** El gato encima de la estantería, un poco más pequeño. */
 export const ESCALA_GATO = 0.7;
 export const ALTO_CAJA = 0.14 * ESCALA_CAJA;
-const CAMION = new Vector3(0.64, 0, -0.42);
+const CAMION = new Vector3(0.66, 0, -0.5);
 const BOTON_DESPACHO = new Vector3(0.64, 0, -0.1);
 /** Estantería: lo más cerca posible sin tapar la zona de trabajo. */
-const Z_REPISA = -0.64;
+const Z_REPISA = -0.62;
 /** Ángulos (grados, positivo a la izquierda) de los paneles alrededor de la persona. */
-export const ANGULO = { panel: 58, derecha: -58, mensajes: 96, resumen: 0 };
+export const ANGULO = { panel: 68, derecha: -58, mensajes: 104, resumen: 0 };
 const DISTANCIA_PANEL = 0.7;
 const BAJO_OJOS = (12.5 * Math.PI) / 180;
 const ESCALA_CAMION = 0.75;
@@ -79,6 +79,9 @@ export class Escena {
   readonly repisa = new Repisa();
   readonly panel = new Panel();
   readonly camion: Group;
+  /** Bisagras de las puertas traseras del camión. */
+  private puertas: Object3D[];
+  private aperturaPuertas = 0;
   readonly pedestal: Mesh;
   readonly botonDespacho = new Boton3D('Despachar', 0.14, 0.06, BOTON.principal);
   readonly letreroDespacho = new Lienzo(640, 140, 0.2);
@@ -106,7 +109,7 @@ export class Escena {
     // Estantería de la página al fondo de la mesa del frente.
     this.repisa.grupo.position.set(0, 0, Z_REPISA);
     this.sobre.add(this.repisa.grupo);
-    const sombraRepisa = sombra(ANCHO_REPISA * 1.1, 0.36, 0.25);
+    const sombraRepisa = sombra(1.1, 0.25, 0.25);
     sombraRepisa.position.set(0, 0.002, Z_REPISA);
     this.sobre.add(sombraRepisa);
 
@@ -148,7 +151,9 @@ export class Escena {
     this.ubicar(this.panel.grupo, ANGULO.panel);
 
     // Camión a la derecha (mira hacia el fondo) y su botón.
-    this.camion = crearCamion();
+    const camion = crearCamion();
+    this.camion = camion.raiz;
+    this.puertas = camion.puertas;
     this.camion.scale.setScalar(ESCALA_CAMION);
     this.camion.position.copy(CAMION);
     this.camion.rotation.y = Math.PI / 2;
@@ -245,14 +250,13 @@ export class Escena {
     // Mesa: a la altura del codo menos 7,5 cm.
     this.alto = Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
     this.sobre.position.y = this.alto;
-    // Góndola: la bandeja de arriba queda bajo la línea de los ojos (sus
-    // productos no tapan la vista). Se achica solo un poco si hace falta,
-    // para que los productos sigan viéndose grandes.
+    // Estantería: la fila de arriba queda bajo la línea de los ojos. Se achica
+    // solo un poco si hace falta, para que los productos se vean grandes.
     const techo = Math.min(this.ojos - 0.1, 0.9 * estatura);
-    const k = Math.min(1, Math.max(0.8, (techo - this.alto) / this.repisa.alturaFilaArriba));
+    const k = Math.min(1, Math.max(0.75, (techo - this.alto) / this.repisa.alturaFilaArriba));
     this.repisa.grupo.scale.setScalar(k);
-    // Reloj al frente del techo de la góndola, donde el gato pone los pies.
-    this.reloj.malla.position.set(0, ALTO_REPISA * k + 0.022, Z_REPISA + (this.repisa.frente + 0.01) * k);
+    // Reloj al frente del techo de la estantería, donde el gato pone los pies.
+    this.reloj.malla.position.set(0, ALTO_REPISA * k + 0.022, Z_REPISA + 0.105 * k);
     // Paneles a la altura de la vista.
     this.ubicados.forEach((u, obj) => this.ponerPanel(obj, u.angulo, u.distancia));
     return this.alto;
@@ -268,7 +272,22 @@ export class Escena {
     return -this.alto;
   }
 
-  /** Punto de la plataforma del camión, en coordenadas de `sobre`. */
+  /** Abre o cierra (animado) las puertas traseras del camión. */
+  puertasCamion(abiertas: boolean, dt: number): void {
+    const objetivo = abiertas ? 1 : 0;
+    this.aperturaPuertas += Math.sign(objetivo - this.aperturaPuertas) * Math.min(Math.abs(objetivo - this.aperturaPuertas), dt * 2.5);
+    const angulo = this.aperturaPuertas * 1.9;
+    this.puertas[0].rotation.y = angulo;
+    this.puertas[1].rotation.y = -angulo;
+  }
+
+  /** Entrada del furgón (detrás de las puertas), en coordenadas de `sobre`. */
+  entradaCamion(salida: Vector3): Vector3 {
+    this.camion.updateWorldMatrix(true, false);
+    return this.sobre.worldToLocal(this.camion.localToWorld(salida.copy(ENTRADA)));
+  }
+
+  /** Dónde queda la caja adentro del furgón, en coordenadas de `sobre`. */
   plataforma(salida: Vector3): Vector3 {
     this.camion.updateWorldMatrix(true, false);
     return this.sobre.worldToLocal(this.camion.localToWorld(salida.copy(PLATAFORMA)));

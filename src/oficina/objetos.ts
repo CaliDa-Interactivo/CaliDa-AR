@@ -16,6 +16,7 @@ import {
   Color,
   BufferGeometry,
   CylinderGeometry,
+  DoubleSide,
   CircleGeometry,
   Group,
   Matrix4,
@@ -492,31 +493,95 @@ export function crearCaja(conCruz = true): CajaArmada {
 
 
 /** Largo del camión (m, antes de su escala en la oficina). */
-const LARGO_CAMION = 0.52;
-/**
- * Dónde se deja la caja del pedido: detrás del camión (la cabina mira
- * a +x), a la altura del piso del furgón, sobre la rampa trasera.
- */
-export const PLATAFORMA = new Vector3(-LARGO_CAMION / 2 - 0.075, 0.074, 0);
+const LARGO_CAMION = 0.6;
+/** Dónde queda la caja del pedido: ADENTRO del furgón, sobre su piso, cerca de la puerta. */
+export const PLATAFORMA = new Vector3();
+/** Justo detrás de las puertas traseras (por donde entra la caja). */
+export const ENTRADA = new Vector3();
 
-/** El camión de la Cruz Roja (camion.glb), con la cabina hacia +x. */
-export function crearCamion(): Group {
-  const g = new Group();
+export interface CamionArmado {
+  raiz: Group;
+  /** Bisagras de las dos puertas traseras (giran en Y para abrir). */
+  puertas: [Object3D, Object3D];
+}
+
+/**
+ * El camión de la Cruz Roja (camion.glb), con la cabina hacia +x. El furgón
+ * del archivo es una caja cerrada: se reemplaza por uno hueco (piso, techo,
+ * paredes y frente) con dos puertas traseras que se abren, para que la caja
+ * del pedido entre sin atravesar el modelo.
+ */
+export function crearCamion(): CamionArmado {
+  const raiz = new Group();
   const gltf = AssetManager.getGLTF('camion');
+  // Medidas del furgón en unidades del archivo (la cabina mira a +Z).
+  const F = { x: 1.2, y0: 0.94, y1: 3.44, zAtras: -3.62, zAdelante: 2.76, grosor: 0.08 };
+  const puertas: [Object3D, Object3D] = [new Group(), new Group()];
+  const marcaCarga = new Object3D();
+  const marcaEntrada = new Object3D();
+  const modelo = gltf ? gltf.scene.clone(true) : new Group();
   if (gltf) {
-    const modelo = gltf.scene.clone(true);
+    let pintura: MeshStandardMaterial | null = null;
+    modelo.traverse((o) => {
+      const m = o as Mesh;
+      if (m.isMesh && (m.material as Material).name === 'Box') {
+        pintura = m.material as MeshStandardMaterial;
+        m.visible = false; // el furgón cerrado del archivo
+      }
+    });
+    const pared = new MeshStandardMaterial({ color: '#F1F1EE', roughness: 0.8, side: DoubleSide });
+    const adentro = new MeshStandardMaterial({ color: '#9C8F80', roughness: 0.9 });
+    const largo = F.zAdelante - F.zAtras;
+    const zc = (F.zAdelante + F.zAtras) / 2;
+    const alto = F.y1 - F.y0;
+    const yc = (F.y0 + F.y1) / 2;
+    const g = F.grosor;
+    const pieza = (w: number, h: number, d: number, m: Material, x: number, y: number, z: number) => {
+      const malla = new Mesh(new BoxGeometry(w, h, d), m);
+      malla.position.set(x, y, z);
+      modelo.add(malla);
+      return malla;
+    };
+    pieza(F.x * 2, g, largo, adentro, 0, F.y0 + g / 2, zc); // piso
+    pieza(F.x * 2, g, largo, pared, 0, F.y1 - g / 2, zc); // techo
+    pieza(g, alto, largo, pared, -F.x + g / 2, yc, zc); // lado
+    pieza(g, alto, largo, pared, F.x - g / 2, yc, zc); // lado
+    pieza(F.x * 2, alto, g, pared, 0, yc, F.zAdelante - g / 2); // frente
+    // Cruz roja a los lados.
+    for (const lado of [-1, 1]) {
+      pieza(0.01, 0.9, 0.3, MP.rojo, lado * (F.x + 0.005), yc, zc);
+      pieza(0.01, 0.3, 0.9, MP.rojo, lado * (F.x + 0.005), yc, zc);
+    }
+    // Puertas traseras con bisagra en cada borde.
+    const ancho = F.x - 0.02;
+    puertas.forEach((bisagra, k) => {
+      const lado = k === 0 ? -1 : 1;
+      bisagra.position.set(lado * F.x, yc, F.zAtras);
+      const hoja = new Mesh(new BoxGeometry(ancho, alto - 0.04, 0.06), pared);
+      hoja.position.set(-lado * (ancho / 2), 0, 0);
+      const manija = new Mesh(new BoxGeometry(0.06, 0.4, 0.06), MP.carbon);
+      manija.position.set(-lado * (ancho - 0.12), 0, -0.05);
+      bisagra.add(hoja, manija);
+      modelo.add(bisagra);
+    });
+    void pintura;
+    // Puntos: la carga, adentro cerca de la puerta; la entrada, detrás.
+    marcaCarga.position.set(0, F.y0 + g, F.zAtras + 2.3);
+    marcaEntrada.position.set(0, F.y0 + g, F.zAtras - 1.2);
+    modelo.add(marcaCarga, marcaEntrada);
     // En el archivo la cabina mira a +Z: se gira para que mire a +x.
     modelo.rotation.y = Math.PI / 2;
     const girado = new Group();
     girado.add(modelo);
-    g.add(encajar(girado, LARGO_CAMION, 1, 1));
+    raiz.add(encajar(girado, LARGO_CAMION, 1, 1));
   } else {
-    g.add(bloque(LARGO_CAMION, 0.2, 0.19, MP.rojo, 0, 0.1, 0));
+    raiz.add(bloque(LARGO_CAMION, 0.2, 0.19, MP.rojo, 0, 0.1, 0));
   }
-  // Rampa trasera donde se apoya la caja del pedido.
-  g.add(bloque(0.16, 0.008, 0.17, MP.carbon, PLATAFORMA.x, PLATAFORMA.y - 0.004, 0));
-  g.add(sombra(0.72, 0.3, 0.4));
-  return g;
+  raiz.updateMatrixWorld(true);
+  raiz.worldToLocal(marcaCarga.getWorldPosition(PLATAFORMA));
+  raiz.worldToLocal(marcaEntrada.getWorldPosition(ENTRADA));
+  raiz.add(sombra(0.8, 0.32, 0.4));
+  return { raiz, puertas };
 }
 
 /** Pantalla del monitor de escritorio.glb (coordenadas del nodo "Monitor"). */

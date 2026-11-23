@@ -55,6 +55,12 @@ export interface Agarrable {
   reposo?: (obj: Object3D) => void;
   /** (Sin uso con la pinza; se conserva por compatibilidad.) */
   palmaLibre?: boolean;
+  /**
+   * Distancia de la pinza para resaltarlo y agarrarlo (por defecto 5 cm).
+   * Las zonas grandes (compartimientos de la estantería) usan casi 0: hay
+   * que meter la pinza adentro, así no se agarran por error.
+   */
+  alcance?: number;
 }
 
 /** Algo que se puede resaltar con un color (o apagar con null). */
@@ -213,7 +219,7 @@ export class Interaccion {
       }
       // Al cerrar la pinza los dedos se mueven un poco: vale el hover de hace un momento.
       const u = this.ultimoHover.get(mano);
-      if (!cerca && mano.recienCerrada && u && this.tiempo - u.t < 0.4 && this.masCercano(mano, ALCANCE * 1.6) === u.ag) {
+      if (!cerca && mano.recienCerrada && u && this.tiempo - u.t < 0.4 && this.masCercano(mano, 1.6) === u.ag) {
         cerca = u.ag;
       }
       const antes = this.hover.get(mano);
@@ -232,17 +238,30 @@ export class Interaccion {
     this.botonesConIndice();
   }
 
-  private masCercano(mano: Mano, alcance = ALCANCE): Agarrable | null {
+  /**
+   * Lo que se resalta (hover) y se agarra: lo más cercano a la pinza dentro
+   * de su alcance. Si la pinza está dentro de varios a la vez (p. ej. la caja
+   * abierta y un compartimiento), gana el más pequeño.
+   */
+  private masCercano(mano: Mano, factor = 1): Agarrable | null {
     let mejor: Agarrable | null = null;
-    let dist = alcance;
+    let dist = Infinity;
+    let vol = Infinity;
     for (const ag of this.agarrables) {
       if (!ag.activo() || !this.visible(ag.obj) || this.ocupado(ag)) {
         continue;
       }
       this.caja.setFromObject(ag.obj);
       const d = this.caja.distanceToPoint(mano.agarre);
-      if (d < dist) {
+      if (d >= (ag.alcance ?? ALCANCE) * factor) {
+        continue;
+      }
+      this.caja.getSize(this.w);
+      const v = this.w.x * this.w.y * this.w.z;
+      const empate = Math.abs(d - dist) < 0.004;
+      if ((empate && v < vol) || (!empate && d < dist)) {
         dist = d;
+        vol = v;
         mejor = ag;
       }
     }

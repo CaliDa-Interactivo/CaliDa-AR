@@ -458,7 +458,8 @@ export class MultiSystem extends OficinaSystem {
     const [min, max] = JORNADAS[this.dia].porCaja;
     return {
       nombre: NOMBRES[Math.floor(r() * NOMBRES.length)],
-      cedula: String(10000000 + Math.floor(r() * 89999999)),
+      // Cédula inventada de 8 a 10 dígitos (nunca datos reales).
+      cedula: Array.from({ length: 8 + Math.floor(r() * 3) }, (_, k) => String(k === 0 ? 1 + Math.floor(r() * 9) : Math.floor(r() * 10))).join(''),
       cat,
       cantidad: min + Math.floor(r() * (max - min + 1)) - 2,
     };
@@ -584,7 +585,7 @@ export class MultiSystem extends OficinaSystem {
     if (normalizar(f.valores.nombre) !== normalizar(d.datos.nombre)) {
       f.errores.add('nombre');
     }
-    if (f.valores.cedula !== d.datos.cedula) {
+    if (!/^\d{8,10}$/.test(f.valores.cedula) || f.valores.cedula !== d.datos.cedula) {
       f.errores.add('cedula');
     }
     if (f.categoria !== d.datos.cat) {

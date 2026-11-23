@@ -1,162 +1,134 @@
-# CaliDa · Realidad aumentada (Meta Quest)
+# CaliDa RA · Centro de acopio
 
-Experiencia de realidad aumentada de CaliDa, hecha con **IWSDK** (Immersive Web SDK de Meta)
-y pensada **solo para gafas Meta Quest**. Es un proyecto aparte de la página interactiva
-(`CaliDa-Interactivo/CaliDa`): no se publica con su mismo enlace.
+Experiencia de **realidad aumentada para Meta Quest 3** del proyecto universitario CaliDa
+(Diseño Interactivo, Cali, Colombia). Es un juego de gestión: después del terremoto de Cali
+(10 ago 2026) la persona maneja un centro de acopio de la Cruz Roja durante una semana, de lunes a
+viernes, cada día más difícil.
 
-## Flujo (diagrama del equipo)
+Es un proyecto **aparte** de la página web CaliDa (`CaliDa-Interactivo/CaliDa`): no se publica en su
+repositorio ni en su enlace.
 
-1. **Bienvenida**: el gato guía saluda sobre su tarima.
-2. **Rol donante**: las gafas reconocen el espacio y buscan una superficie plana.
-   - Si hay una mesa real, se usa; si no, aparece una **mesa virtual**.
-3. Aparecen la **estantería y la caja**: se toman productos y se llevan a la caja (caben 6).
-4. Se cierra la caja y se sube al **camión** con la mano.
-5. **Mapa de Cali** con refugios (casa roja = urgente, amarilla = desabastecido) y lo que necesita cada uno.
-6. El camión viaja al refugio elegido → **cambio de perspectiva**.
-7. **Rol beneficiario**: una carpa aparece sobre la persona; vive tres situaciones y usa lo que llegó.
-   - Si los recursos no alcanzan → vuelve a la selección para completar la donación.
-8. El gato cierra la experiencia.
+**Enlace:** https://calida-interactivo.github.io/CaliDa-AR/
 
-## CaliDa RA · Centro de acopio (experiencia principal, desde el 18 nov 2026)
+## Cómo abrirlo en las gafas
 
-Juego de gestión con presión de tiempo: la persona maneja un centro de acopio de la Cruz Roja en
-Cali durante una semana (lunes a viernes, cada día más difícil). La oficina se arma en U a su
-alrededor: izquierda, el panel de avisos; frente, la estantería de 5 categorías (tope de 30 cada una),
-la pila de cajas, la zona de trabajo, la caja del pedido y la caneca de descarte; derecha, el camión
-y el botón "Despachar".
+1. En el Meta Quest 3, abre el navegador y entra a https://calida-interactivo.github.io/CaliDa-AR/
+2. Elige **Un jugador** o **Multijugador** y toca **Entrar en RA** (acepta los permisos de manos y
+   espacio). Si ves la versión vieja, recarga la página.
+3. El gato y el botón **Colocar aquí** siguen tu mirada. Párate derecho, mira al frente y empuja el
+   botón con la punta del índice: la oficina se calibra a tu estatura y queda anclada a ese lugar.
 
-- **Estantería de la página, completa:** `estanteria.glb` con las 5 categorías de la página
-  (Alimento, Aseo, Ropa, Medicamentos, Construcción) y sus 16 productos, con los mismos nombres,
-  modelos, colores y calcomanías (`public/models/ra/`, simplificados). Cada producto tiene su columna
-  y su etiqueta clavada al frente de la tabla de abajo; la placa de la categoría (con `n/30` y el
-  punto de estado) cuelga al frente, arriba del compartimiento. Los objetos se acomodan como en
-  bodega: primero la fila de adelante y después las de atrás. El gato va encima de la estantería
-  con el reloj digital a sus pies. Botones: píldoras 3D con los colores del administrador.
-- **Ergonomía (calibración de pie al colocar):** estatura ≈ altura de los ojos / 0,93. Mesa a la
-  altura del codo (0,63 × estatura) menos 7,5 cm; la estantería se achica si hace falta para que
-  sus filas queden entre la cadera y los hombros (nunca sobre los ojos); paneles a 70 cm con el
-  centro 12,5° bajo los ojos, mirando a la persona; lo que se agarra a 35–60 cm del pecho. Botón
-  "Recalibrar altura" en el menú bajo el panel (`ajustarErgonomia` en `escena.ts`).
-- **Fin de cada jornada:** "Continuar" (siguiente día) o "Finalizar experiencia" (resumen total y
-  "Volver al inicio", donde está el gato). El viernes solo "Finalizar experiencia".
-- **Espacio:** la mesa flota (sin patas). El piso se
-  busca con los planos del visor y, si no hay, con hit-test (`SondaPiso` en `webxr.ts`); si nada
-  responde se usa el piso del espacio de referencia. Mientras se escoge el lugar, el gato y
-  "Colocar aquí" siguen la mirada. Al colocarla se fija con un ancla de WebXR.
-- **Manos sin pellizco:** la palma de canto (vertical) junto a un objeto lo resalta y al cerrar el
-  puño se agarra (cierra < 4,5 cm, abre > 6,5 cm). Lo que se lleva va en la palma, un poco afuera
-  de los nudillos, con el giro con que se tomó, sigue la muñeca suavizado (~50 ms), se achica si es
-  grande y siempre se ve encima de la mano. Sonidos: "pop" al agarrar, acierto o error al soltar en
-  un puesto. Botones con la punta del índice. Rayos y pellizco de IWSDK apagados. Con controles:
-  gatillo lateral. En el computador (`?prueba`): arrastrar y hacer clic con el mouse.
-- **Oclusión:** con Depth Sensing (Quest 3) lo real tapa lo virtual con borde suave
-  (`DepthSensingSystem` + `oclusion.ts`, que también parcha los objetos que aparecen después); sin
-  él, la malla de la mano se vuelve un oclusor invisible. La mano dibujada no se ve.
-- **Flujo:** llegan cajas → abrir con la tapa → revisar cada objeto a mano (contorno rojo = dañado;
-  el gato lo explica, ya no hay pregunta Sí / No) → a su fila o a la caneca → llega un pedido con reloj → elegir el municipio del Valle del Cauca →
-  armar la caja desde la repisa → al camión → botón. Resumen diario con estrellas y resumen de la semana.
-- **Código:** `src/oficina/` (`juego.ts` es el sistema; `escena.ts`, `repisa.ts`, `panel.ts`,
-  `interaccion.ts`, `manos.ts`, `objetos.ts`, `datos.ts` con las jornadas y municipios).
-- **Multijugador (2 Quest):** en la pantalla de inicio, "Multijugador" → quien crea la sala elige su
-  rol y recibe un código de 4 dígitos; el otro lo escribe y queda con el rol contrario. Conexión con
-  PeerJS (WebRTC; el servidor público de PeerJS solo los presenta). El anfitrión manda el reloj, la
-  repisa compartida, el estado de las categorías, el chat y los resúmenes.
-  - **Receptor:** donantes en fila con barra de paciencia y tarjeta (nombres y cédulas inventados);
-    se digita nombre, cédula, categoría y cantidad en el teclado virtual y se registra; si la fila
-    está llena se rechaza. Abre cajas, clasifica a mano y surte la repisa. A la derecha, el panel de estado.
-  - **Despachador:** pedidos con reloj en su computador, caja vacía infinita, camión y botón. Sin
-    caneca (no clasifica) y sin teclado.
-  - **Mensajes** a la izquierda del panel, solo con botones (sin texto libre): uno por categoría con
-    la foto de su producto (el otro recibe "Necesito [ícono] [categoría]") y cuatro fijos: "¡Hola!",
-    "Pedido urgente", "Categoría llena" y "Listo, enviado". Se ven los últimos 5, con ícono, sonido
-    de notificación y la hora del reloj del juego.
-  - Archivos: `red.ts` (PeerJS), `compartido.ts` (estado y reglas, sin three.js), `multi.ts`
-    (sistema), `multi-ui.ts` (teclado, chat, formulario, panel de estado, donantes).
-  - Prueba en el computador: `?prueba&multi=crear&rol=despachador` en una pestaña (el código
-    queda en el título) y `?prueba&multi=unir&sala=CÓDIGO` en otra.
+Para que encuentre el piso, las gafas deben tener hecha la configuración del espacio
+(Ajustes → Entorno → Configuración del espacio). Si no hay planos, se usa hit-test o el piso del
+espacio de referencia.
 
-Otros recorridos que se conservan: `?guion` ("Cali en tu mesa") y `?anterior` (donante → beneficiario).
+## Controles
 
-## Guion "Cali en tu mesa" (se abre con ?guion)
+Sin pellizco y sin rayos: todo con las manos.
 
-La persona **es un centro de acopio** durante una semana (un lote). En la mesa aparecen dos cosas
-separadas: su puesto (estantería de madera "CA" y el panel con las opciones para gestionar las
-donaciones) y, aparte, el mapa de Cali con las cinco zonas (los mismos contornos y colores del mapa
-de la página, sin casas) para enviar lo que tiene. Se abre directo; con `?prueba` se recorre con el
-mouse y con `?anterior` se abre el primer recorrido (donante → beneficiario).
-
-| Escena | Estado |
+| Acción | Cómo |
 | --- | --- |
-| 1 DETECTAR_MESA · 2 COLOCAR_MAQUETA · 3 MISION | hechas |
-| Campana de avisos · 5 NOTIFICACION_CAJAS · 6 RESTOCK_MANUAL | hechas |
-| 7 NECESIDADES · 8 URGENCIA · 10 DESPACHO · 11 FAMILIA (entrega) | hechas |
-| 4 TUTORIAL · 9 ARMAR_CAJA · 12 CIERRE | hechas (guion completo) |
+| Resaltar un objeto | Pon la palma **de canto** (vertical) junto a él: contorno blanco |
+| Agarrar | Cierra el **puño** (las puntas a menos de 4,5 cm del centro de la palma) |
+| Soltar | Abre la mano (más de 6,5 cm). Encaja en un puesto válido (verde) o cae a la mesa o al piso |
+| Botones | Empújalos con la **punta del índice**: se hunden hasta 1,5 cm |
+| Con controles | Gatillo lateral = cerrar la mano |
+| Computador (`?prueba`) | Arrastrar y hacer clic con el mouse, sin pantalla de entrada |
 
-Archivos en `src/guion/`: `maquina.ts` (máquina de estados), `contexto.ts` (lo que comparten las
-escenas), `estado.ts`, `manos.ts` (gestos con WebXR), `gato.ts`, `maqueta.ts`, `zonas-cali.ts`,
-`notificaciones.ts` (campana, panel y gestor de eventos), `eventos.ts` (línea de tiempo por día),
-`llegadas.ts` (cajas y objetos), `zonas.ts` (burbujas, lluvia y misión), `sonidos.ts`,
-`animador.ts` y `escenas/NN-nombre.ts` (una por escena).
+Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Saltar tutorial**.
 
-## Herramientas del proyecto (comprobadas)
+## El juego
 
-| Herramienta | Dónde está en este proyecto |
+- **Oficina en U** flotante (sin patas): a la izquierda el panel de avisos; al frente la estantería de
+  la página (5 categorías, tope 30, alerta en 25) con el gato encima y el reloj a sus pies, la pila de
+  cajas (máx. 8), la zona de trabajo, la caja del pedido y la caneca de descarte; a la derecha el
+  camión de la Cruz Roja y el botón **Despachar**.
+- **Flujo:** campana → aviso → llegan cajas → quitar la tapa → revisar cada objeto a mano (contorno
+  rojo y letrero = dañado) → a su compartimiento o a la caneca. Llegan pedidos de municipios del Valle
+  del Cauca con reloj → aceptar → elegir municipio → llenar la caja desde la estantería → al camión →
+  Despachar.
+- **Inventario inicial:** Alimento 10, Aseo 9, Ropa 26, Medicamentos 7, Construcción 6.
+- **Cada día** tiene más cajas, más dañados (15 % → 35 %), relojes más cortos y urgencias por lluvias
+  o inundaciones. Al final, resumen con estrellas y **Continuar** / **Finalizar experiencia** (el
+  viernes solo Finalizar). El resumen total lleva a **Volver al inicio**.
+- **Tutorial** el lunes con pistas del gato y una flecha.
+
+### Multijugador (2 Quest)
+
+En la entrada, **Multijugador** → quien crea la sala elige su rol (**receptor** o **despachador**) y
+recibe un código de 4 dígitos; el otro lo escribe y queda con el rol contrario. La conexión es
+WebRTC con PeerJS (el servidor público solo presenta a los dos equipos).
+
+- El **anfitrión manda** el reloj, la estantería, los estados de las categorías, los mensajes y los
+  resúmenes (4 veces por segundo). Los cambios del invitado en la estantería se ven al instante y se
+  confirman con número de secuencia (seq/ack). Reconexión automática.
+- **Receptor:** donantes en fila con paciencia y tarjeta (datos **inventados**), formulario con teclado
+  virtual (nombre, cédula de 8 a 10 dígitos, categoría, cantidad) → Registrar o Rechazar; abre cajas,
+  clasifica y surte la estantería; panel de estado a la derecha.
+- **Despachador:** pedidos con reloj, caja de pedido infinita, camión y botón (sin caneca ni teclado).
+- **Mensajes solo con botones:** uno por categoría ("Necesito [ícono] [categoría]") y cuatro fijos:
+  "¡Hola!", "Pedido urgente", "Categoría llena" y "Listo, enviado". Se ven los últimos 5 con hora.
+
+## Herramientas
+
+| Herramienta | Uso |
 | --- | --- |
-| **WebXR** | Sesión `immersive-ar` de las Quest. Uso directo en `src/webxr.ts` (soporte, planos, anclas) y `src/guion/manos.ts` (articulaciones de la mano) |
-| **IWSDK** | `@iwsdk/core` 1.1.0-rc.2; `iwsdk.config.json` manda sobre la sesión y las funciones |
-| **Three.js** | Viene dentro de IWSDK (super-three 0.185): siempre se importa de `@iwsdk/core`, nunca de `three` |
-| **IWER** | Emulador de Quest 3 (`iwer` 2.8, con `@iwsdk/vite-plugin-dev`): se abre con `npm run dev` |
-| **ECS** | Componentes en `src/componentes-calida.ts` y sistemas en `src/guion/maquina.ts` y `src/experiencia.ts` |
-| **UIKitML** | Panel del centro de acopio: `public/ui/centro-acopio.uikitml` (función `spatialUI`) |
-| Scene Understanding | `sceneUnderstanding: true` + planos y mallas: encontrar la mesa real |
-| Environment Raycast | `environmentRaycast: true` + `hitTest`: la retícula de la escena 1 sigue la mirada sobre superficies reales |
+| **IWSDK** `@iwsdk/core` 1.1.0-rc.2 | Immersive Web SDK de Meta: ECS (entidades, componentes y sistemas), sesión WebXR, manos, oclusión por profundidad. `iwsdk.config.json` manda sobre la configuración |
+| **WebXR** | Uso directo en `src/webxr.ts`: soporte, anclas (`createAnchor`), planos del piso, hit-test. Articulaciones de la mano en `src/oficina/manos.ts` |
+| **three.js** (super-three 0.185) | Viene con IWSDK; siempre se importa de `@iwsdk/core` |
+| **IWER** | Emulador de Quest 3 de IWSDK, se abre con `npm run dev` |
+| **PeerJS** 1.5 | Multijugador por WebRTC |
+| **Vite** 7 + **TypeScript** 5 | Compilación |
+| **Roboto** | Única tipografía (texto 2D, letreros 3D y lienzos) |
+| Web Audio | Sonidos sin archivos (`src/guion/sonidos.ts`) |
+| glTF Transform | Simplificar los modelos para el Quest (`public/models/ra/`) |
 
-Los paneles UIKitML usan una Roboto propia (`public/ui/fonts/`) y `src/guion/fuente-es.ts` le agrega
-las tildes y la eñe, que la fuente incluida en IWSDK no trae.
+## Desarrollo
 
-## Cómo abrirlo
-
-Hace falta Node 20.19 o más nuevo.
+Hace falta Node 22 LTS (o 20.19+ / 24).
 
 ```bash
 npm install
-npm run dev
+npm run dev              # emulador IWER con un Quest 3 simulado
+npm run typecheck        # siempre antes de probar
+npm run build            # compila a dist/
+npm run prueba:compartido  # pruebas de las reglas del multijugador (node)
 ```
 
-- **En las gafas**: con el computador y las Quest en la misma red wifi, abre en el navegador de
-  las gafas la dirección de red que muestra `npx @iwsdk/cli dev status` (por ejemplo
-  `https://192.168.x.x:8081/`), acepta el aviso del certificado local y toca
-  "Entrar en realidad aumentada". Para que encuentre mesas reales, las gafas deben tener hecha la
-  configuración del espacio (Ajustes → Entorno → Configuración del espacio).
-- **En el computador**: `npm run dev` abre un navegador con el emulador de Quest de IWSDK.
-- **Recorrido rápido con el mouse** (sin sesión de RA): agrega `?prueba` a la dirección.
+Modo prueba con el mouse: `?prueba` (un jugador), `?prueba&multi=crear&rol=despachador` y
+`?prueba&multi=unir&sala=CÓDIGO`. Para el multijugador usa **dos ventanas lado a lado** (no pestañas:
+la de atrás se congela).
 
-Manos: se apunta con la mano y se **junta el pulgar con el índice** para tocar y agarrar
-(también funciona con los controles: gatillo).
+Simplificar un modelo pesado:
 
-## WebXR
+```bash
+npx -y @gltf-transform/cli@4.1.1 simplify --ratio 0.1 --error 0.01 entrada.glb salida.glb
+```
 
-WebXR es la API del navegador de las gafas que da acceso a la sesión inmersiva; IWSDK funciona
-encima de ella. Además de lo que IWSDK hace por dentro, `src/webxr.ts` la usa directamente:
-
-- `navigator.xr.isSessionSupported('immersive-ar')`: la pantalla de entrada avisa si el equipo
-  puede abrir la sesión de realidad aumentada.
-- `XRFrame.detectedPlanes`: se recorren los planos que detecta el visor para encontrar una mesa real.
-- `XRFrame.createAnchor`: la estación de trabajo queda anclada al mundo real y sigue a su ancla.
-- `XRSession.enabledFeatures`: al entrar, la consola muestra qué funciones concedió el visor.
-
-Las funciones que se piden a la sesión están en `iwsdk.config.json` (`world.xr.features`).
-
-## Dónde está cada cosa
+## Estructura
 
 | Archivo | Qué tiene |
 | --- | --- |
-| `iwsdk.config.json` | Sesión de RA, manos, detección de planos, agarre |
-| `src/experiencia.ts` | El flujo completo (fases, mesa real o virtual, caja, camión, mapa, carpa) |
-| `src/datos.ts` | Productos, refugios y sus necesidades, textos de las situaciones, paleta |
-| `src/modelos.ts` | Modelos: los `.glb` del equipo y los hechos en código (caja, camión, mesa, carpa, mapa) |
-| `src/webxr.ts` | Uso directo de WebXR: soporte, planos detectados y anclas |
-| `src/texto.ts` | Globo del gato, botón y etiquetas (Roboto) |
-| `src/assets.ts` | Catálogo de modelos (`public/models/*.glb`, copiados de la página) |
+| `index.html` | Pantalla de entrada (modo, multijugador, "Entrar en RA") |
+| `src/index.ts` | Crea el mundo, registra `DepthSensingSystem` y el sistema del modo |
+| `src/assets.ts` | Manifiesto de GLB |
+| `src/webxr.ts` | `comprobarWebXR`, `AnclaWebXR`, `SondaPiso` |
+| `src/guion/` | Gato (modelo, globo y animaciones), animador, sonidos, tildes para UIKit |
+| `src/oficina/datos.ts` | Categorías, productos, jornadas, municipios |
+| `src/oficina/modelo.ts` | Aviso, Pedido, Cuenta, estrellas |
+| `src/oficina/escena.ts` | Oficina en U y ergonomía |
+| `src/oficina/repisa.ts` | Estantería, columnas, placas y etiquetas |
+| `src/oficina/objetos.ts` | Productos, contorno, daño, caja, camión y sombras |
+| `src/oficina/manos.ts` · `interaccion.ts` | Puño, palma, índice; agarrar, soltar, gravedad, botones |
+| `src/oficina/oclusion.ts` | Profundidad, oclusor de mano y objeto siempre encima |
+| `src/oficina/ui.ts` · `panel.ts` | Lienzos, botones 3D, panel de avisos |
+| `src/oficina/juego.ts` | `OficinaSystem` (un jugador) |
+| `src/oficina/red.ts` · `compartido.ts` · `multi.ts` · `multi-ui.ts` | Multijugador |
+| `src/oficina/miniaturas.ts` | Fotos de los productos para íconos |
+| `pruebas/compartido.prueba.ts` | Pruebas de `compartido.ts` con node |
 
-Antes de probar un cambio: `npm run typecheck`.
+## Publicación
+
+Cada push a `main` ejecuta `.github/workflows/pages.yml` (Node 22, `npm ci --ignore-scripts`,
+typecheck, build) y publica `dist/` en GitHub Pages. La versión anterior quedó en la etiqueta
+`version-anterior`.

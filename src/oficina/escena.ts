@@ -32,7 +32,7 @@ import {
   Vector3,
   type Object3D,
 } from '@iwsdk/core';
-import { PLATAFORMA, crearCamion, sombra } from '../modelos.js';
+import { PLATAFORMA, crearCamion, sombra } from './objetos.js';
 import { COLOR } from './datos.js';
 import { Panel } from './panel.js';
 import { ALTO_REPISA, Repisa } from './repisa.js';

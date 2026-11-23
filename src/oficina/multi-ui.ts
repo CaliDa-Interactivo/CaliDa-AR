@@ -15,7 +15,7 @@ import {
   MeshStandardMaterial,
   SphereGeometry,
 } from '@iwsdk/core';
-import { crearCaja, sombra } from '../modelos.js';
+import { crearCaja, sombra } from './objetos.js';
 import { CATEGORIAS, COLOR, type IdCategoria } from './datos.js';
 import type { Rol } from './red.js';
 import { BOTON, Boton3D, FUENTE, Lienzo, fondoPanel, lineas, rect, textoAjustado } from './ui.js';

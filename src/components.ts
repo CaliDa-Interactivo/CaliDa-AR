@@ -1,4 +1,6 @@
+// Catálogo de componentes (lo leen la app y el editor de IWSDK).
+// CaliDa RA no declara componentes propios: la oficina se arma en
+// sus sistemas (OficinaSystem / MultiSystem) con objetos de three.js.
 import { defineComponents } from '@iwsdk/core';
-import { Boton, CajaDonacion, Casa, Producto, Tocable } from './componentes-calida.js';
 
-export default defineComponents([Producto, Boton, Casa, CajaDonacion, Tocable]);
+export default defineComponents([]);

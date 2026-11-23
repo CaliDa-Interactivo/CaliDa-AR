@@ -15,6 +15,7 @@ import {
   CanvasTexture,
   Color,
   BufferGeometry,
+  CylinderGeometry,
   CircleGeometry,
   Group,
   Matrix4,
@@ -29,7 +30,7 @@ import {
   type Material,
 } from '@iwsdk/core';
 import { CATEGORIAS, COLOR, categoriaDe, type IdCategoria, type Producto } from './datos.js';
-import { Etiqueta } from '../texto.js';
+import { Etiqueta } from './ui.js';
 
 export interface Parte {
   geometria: BufferGeometry;
@@ -341,4 +342,194 @@ export class Objeto {
   reposo(): void {
     this.contorno.poner(this.danado ? COLOR.rojo : null);
   }
+}
+
+// ---- Piezas armadas en código: caja, camión, tarima y sombra ----
+
+const MP = {
+  rojo: mate(COLOR.rojo),
+  rojoProfundo: mate(COLOR.rojoProfundo),
+  marfil: mate(COLOR.crema),
+  carbon: mate(COLOR.carbon),
+  petroleo: mate(COLOR.petroleo),
+  carton: mate("#C99A62"),
+  cartonOscuro: mate("#B5854F"),
+  crema: mate(COLOR.crema),
+  verde: mate("#B3D49F"),
+  ambar: mate("#E6A341"),
+  cobre: mate("#B8683A"),
+};
+
+function bloque(w: number, h: number, d: number, material: Material, x = 0, y = 0, z = 0): Mesh {
+  const malla = new Mesh(new BoxGeometry(w, h, d), material);
+  malla.position.set(x, y, z);
+  return malla;
+}
+
+const tamE = new Vector3();
+const centroE = new Vector3();
+
+/**
+ * Mete un modelo en una envoltura: escalado para caber en ancho × alto ×
+ * fondo, centrado en x/z y apoyado en y = 0.
+ */
+export function encajar(
+  objeto: Object3D,
+  ancho: number,
+  alto: number,
+  fondo = ancho,
+): Group {
+  objeto.updateMatrixWorld(true);
+  const limites = new Box3().setFromObject(objeto, true);
+  limites.getSize(tamE);
+  const escala = Math.min(ancho / tamE.x, alto / tamE.y, fondo / tamE.z);
+  objeto.scale.multiplyScalar(escala);
+  objeto.updateMatrixWorld(true);
+  limites.setFromObject(objeto, true);
+  limites.getCenter(centroE);
+  objeto.position.x -= centroE.x;
+  objeto.position.z -= centroE.z;
+  objeto.position.y -= limites.min.y;
+  const envoltura = new Group();
+  envoltura.add(objeto);
+  return envoltura;
+}
+
+
+/** Zona invisible que hace más fácil apuntar a un objeto pequeño. */
+function zonaDeToque(w: number, h: number, d: number): Mesh {
+  const malla = new Mesh(
+    new BoxGeometry(w, h, d),
+    new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+  );
+  malla.position.y = h / 2;
+  return malla;
+}
+
+// --- Sombra suave pintada (la misma idea de la isla de la portada) -------
+let texturaSombra: CanvasTexture | null = null;
+export function sombra(ancho: number, fondo: number, opacidad = 0.38): Mesh {
+  if (!texturaSombra) {
+    const lienzo = document.createElement('canvas');
+    lienzo.width = lienzo.height = 128;
+    const ctx = lienzo.getContext('2d') as CanvasRenderingContext2D;
+    const grad = ctx.createRadialGradient(64, 64, 6, 64, 64, 64);
+    grad.addColorStop(0, 'rgba(40, 18, 6, 1)');
+    grad.addColorStop(0.55, 'rgba(40, 18, 6, 0.55)');
+    grad.addColorStop(1, 'rgba(40, 18, 6, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 128, 128);
+    texturaSombra = new CanvasTexture(lienzo);
+    texturaSombra.colorSpace = SRGBColorSpace;
+  }
+  const malla = new Mesh(
+    new PlaneGeometry(ancho, fondo),
+    new MeshBasicMaterial({
+      map: texturaSombra,
+      transparent: true,
+      opacity: opacidad,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  malla.rotation.x = -Math.PI / 2;
+  malla.position.y = 0.002;
+  malla.renderOrder = 1;
+  return malla;
+}
+
+// --- Caja de la donación -------------------------------------------------
+export const CAJA = { ancho: 0.26, alto: 0.14, fondo: 0.19 };
+
+export interface CajaArmada {
+  raiz: Group;
+  solapas: Group;
+  tapa: Group;
+}
+
+export function crearCaja(conCruz = true): CajaArmada {
+  const { ancho: w, alto: h, fondo: d } = CAJA;
+  const g = 0.008;
+  const raiz = new Group();
+  raiz.add(bloque(w, g, d, MP.cartonOscuro, 0, g / 2, 0));
+  raiz.add(bloque(w, h, g, MP.carton, 0, h / 2, d / 2 - g / 2));
+  raiz.add(bloque(w, h, g, MP.carton, 0, h / 2, -d / 2 + g / 2));
+  raiz.add(bloque(g, h, d, MP.carton, -w / 2 + g / 2, h / 2, 0));
+  raiz.add(bloque(g, h, d, MP.carton, w / 2 - g / 2, h / 2, 0));
+  // Relleno de papel: los productos se apoyan aquí y asoman por el borde.
+  raiz.add(bloque(w - 2 * g, 0.04, d - 2 * g, MP.crema, 0, g + 0.02, 0));
+  // Cruz roja al frente.
+  if (conCruz) {
+    raiz.add(bloque(0.07, 0.07, 0.002, MP.marfil, 0, h / 2, d / 2 + 0.001));
+    raiz.add(bloque(0.045, 0.014, 0.002, MP.rojo, 0, h / 2, d / 2 + 0.003));
+    raiz.add(bloque(0.014, 0.045, 0.002, MP.rojo, 0, h / 2, d / 2 + 0.003));
+  }
+
+  // Solapas abiertas hacia afuera.
+  const solapas = new Group();
+  const lado = (x: number, giro: number) => {
+    const s = bloque(d * 0.42, g, d, MP.carton);
+    s.geometry.translate((Math.sign(x) * d * 0.42) / 2, 0, 0);
+    s.position.set(x, h, 0);
+    s.rotation.z = giro;
+    solapas.add(s);
+  };
+  lado(-w / 2, 0.75);
+  lado(w / 2, -0.75);
+  raiz.add(solapas);
+
+  // Tapa cerrada con su cinta.
+  const tapa = new Group();
+  tapa.add(bloque(w + 0.004, g, d + 0.004, MP.carton, 0, h + g / 2, 0));
+  tapa.add(bloque(w + 0.006, g + 0.002, 0.03, MP.crema, 0, h + g / 2, 0));
+  tapa.visible = false;
+  raiz.add(tapa);
+
+  raiz.add(sombra(w * 1.5, d * 1.6, 0.36));
+  raiz.add(zonaDeToque(w, h, d));
+  return { raiz, solapas, tapa };
+}
+
+
+/** Centro de la plataforma de carga, medido desde el origen del camión. */
+export const PLATAFORMA = new Vector3(-0.085, 0.092, 0);
+
+export function crearCamion(): Group {
+  const g = new Group();
+  g.add(bloque(0.52, 0.03, 0.2, MP.carbon, 0, 0.06, 0));
+  // Cabina (adelante es +x).
+  g.add(bloque(0.15, 0.15, 0.22, MP.rojo, 0.185, 0.15, 0));
+  g.add(bloque(0.004, 0.06, 0.18, MP.petroleo, 0.262, 0.175, 0));
+  g.add(bloque(0.07, 0.055, 0.224, MP.petroleo, 0.2, 0.18, 0));
+  g.add(bloque(0.02, 0.02, 0.2, MP.marfil, 0.262, 0.09, 0));
+  // Plataforma con barandas bajas.
+  g.add(bloque(0.36, 0.018, 0.24, MP.marfil, -0.085, 0.083, 0));
+  g.add(bloque(0.36, 0.035, 0.008, MP.rojoProfundo, -0.085, 0.108, 0.116));
+  g.add(bloque(0.36, 0.035, 0.008, MP.rojoProfundo, -0.085, 0.108, -0.116));
+  g.add(bloque(0.008, 0.035, 0.24, MP.rojoProfundo, -0.261, 0.108, 0));
+  // Ruedas.
+  const rueda = new CylinderGeometry(0.042, 0.042, 0.035, 20);
+  rueda.rotateX(Math.PI / 2);
+  for (const x of [0.17, -0.17]) {
+    for (const z of [0.105, -0.105]) {
+      const r = new Mesh(rueda, MP.carbon);
+      r.position.set(x, 0.042, z);
+      g.add(r);
+    }
+  }
+  g.add(sombra(0.7, 0.36, 0.4));
+  return g;
+}
+
+
+// --- Tarima de la bienvenida --------------------------------------------
+export function crearTarima(): Group {
+  const g = new Group();
+  const arriba = new Mesh(new CylinderGeometry(0.24, 0.24, 0.02, 48), MP.verde);
+  arriba.position.y = 0.02;
+  const medio = new Mesh(new CylinderGeometry(0.26, 0.26, 0.02, 48), MP.ambar);
+  const base = new Mesh(new CylinderGeometry(0.25, 0.2, 0.03, 48), MP.cobre);
+  base.position.y = -0.025;
+  g.add(arriba, medio, base);
+  return g;
 }

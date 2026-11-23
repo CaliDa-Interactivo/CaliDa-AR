@@ -1,9 +1,7 @@
-// CaliDa — experiencia de realidad aumentada para Meta Quest (IWSDK).
+// CaliDa RA · Centro de acopio — realidad aumentada para Meta Quest 3 (IWSDK).
 import './guion/fuente-es.js'; // tildes y eñes en los paneles (antes de crear el mundo)
 import { DepthSensingSystem, VisibilityState, World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
-import { ExperienciaSystem } from './experiencia.js';
-import { GuionSystem } from './guion/maquina.js';
 import { OficinaSystem } from './oficina/juego.js';
 import { MultiSystem } from './oficina/multi.js';
 import { Red, type Rol } from './oficina/red.js';
@@ -27,9 +25,6 @@ const botonVolver = $<HTMLButtonElement>('volver-modo');
 const parametros = new URLSearchParams(window.location.search);
 // ?prueba: recorrido con el mouse en el computador, sin la pantalla de entrada.
 const enPrueba = parametros.has('prueba');
-// La experiencia principal es el centro de acopio. Se conservan:
-// ?guion ("Cali en tu mesa") y ?anterior (donante → beneficiario).
-const modo = parametros.has('anterior') ? 'anterior' : parametros.has('guion') ? 'guion' : 'oficina';
 
 // La sala se puede crear o unir apenas abre la página (sin esperar al 3D).
 const red = new Red();
@@ -49,20 +44,12 @@ World.create($<HTMLDivElement>('scene-container'), projectOptions).then(async (w
       return;
     }
     registrado = true;
-    if (modo === 'oficina') {
-      // Oclusión con la profundidad real (Quest 3): manos y objetos reales tapan
-      // lo virtual con un borde suave. Si el visor no la da, no hace nada.
-      world.registerSystem(DepthSensingSystem, {
-        configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 20 },
-      });
-    }
-    if (modo === 'guion') {
-      world.registerSystem(GuionSystem);
-    } else if (modo === 'anterior') {
-      world.registerSystem(ExperienciaSystem);
-    } else {
-      world.registerSystem(sistema === 'multi' ? MultiSystem : OficinaSystem);
-    }
+    // Oclusión con la profundidad real (Quest 3): manos y objetos reales tapan
+    // lo virtual con un borde suave. Si el visor no la da, no hace nada.
+    world.registerSystem(DepthSensingSystem, {
+      configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 20 },
+    });
+    world.registerSystem(sistema === 'multi' ? MultiSystem : OficinaSystem);
   };
   let puedeRA = false;
 

@@ -330,3 +330,33 @@ function textoAjustadoIzq(ctx: CanvasRenderingContext2D, texto: string, x: numbe
   }
   ctx.fillText(texto, x, y);
 }
+
+/** Etiqueta pequeña en píldora (p. ej. el defecto de un objeto dañado). */
+export class Etiqueta extends Lienzo {
+  constructor(anchoM = 0.2) {
+    super(512, 120, anchoM);
+  }
+
+  escribir(texto: string, fondo: string = COLOR.azul): void {
+    const { ctx } = this;
+    const w = this.ancho;
+    const h = this.alto;
+    this.limpiar();
+    // Si el texto es largo, la letra baja hasta que quepa.
+    let tam = 46;
+    ctx.font = `700 ${tam}px ${FUENTE}`;
+    while (tam > 22 && ctx.measureText(texto).width > w - 80) {
+      tam -= 2;
+      ctx.font = `700 ${tam}px ${FUENTE}`;
+    }
+    const ancho = Math.min(w - 8, ctx.measureText(texto).width + 72);
+    ctx.fillStyle = fondo;
+    rect(ctx, (w - ancho) / 2, 12, ancho, h - 24, (h - 24) / 2);
+    ctx.fill();
+    ctx.fillStyle = COLOR.crema;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(texto, w / 2, h / 2 + 3, w - 60);
+    this.listo();
+  }
+}

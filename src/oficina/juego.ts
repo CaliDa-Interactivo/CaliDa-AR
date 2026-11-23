@@ -28,7 +28,7 @@ import {
 import { Animador } from '../guion/animador.js';
 import { Gato } from '../guion/gato.js';
 import { sonidos } from '../guion/sonidos.js';
-import { crearCaja, crearTarima, type CajaArmada } from '../modelos.js';
+import { crearCaja, crearTarima, type CajaArmada } from './objetos.js';
 import { AnclaWebXR, SondaPiso } from '../webxr.js';
 import {
   CATEGORIAS,
@@ -1060,7 +1060,7 @@ export class OficinaSystem extends createSystem({}) {
     }
     this.camion = 'yendo';
     this.tCamion = 0;
-    this.gato.animar('aplaudir', 2.5, this.tiempo);
+    this.gato.animar(quejas ? 'triste' : 'feliz', 2.5, this.tiempo);
     this.gato.decir(
       quejas
         ? `El camión salió, pero llevaba ${quejas} cosa${quejas > 1 ? 's' : ''} dañada${quejas > 1 ? 's' : ''}: habrá una queja.`

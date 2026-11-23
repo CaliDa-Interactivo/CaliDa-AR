@@ -43,3 +43,7 @@ pids/
 .cursor/mcp.json
 .vscode/mcp.json
 .codex/config.toml
+
+# Modelos de Blender y ajustes locales de Claude
+*.blend
+.claude/

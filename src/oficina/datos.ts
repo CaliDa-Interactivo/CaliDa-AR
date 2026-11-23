@@ -139,7 +139,7 @@ export const COLOR = {
   azul: '#011E41',
   azulMarino: '#0B1E3F',
   coral: '#F67B5A',
-  rojo: '#C80000',
+  rojo: '#CC0100',
   rojoProfundo: '#A5121A',
   crema: '#FFF8ED',
   arena: '#E8E1D5',

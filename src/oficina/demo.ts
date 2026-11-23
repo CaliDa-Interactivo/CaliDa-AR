@@ -3,11 +3,12 @@
 // mismas piezas que la oclusión de la mano, con su línea blanca):
 //
 //  · DemoBoton (en "Colocar aquí"): la mano empuja con la punta del
-//    índice un botón de MUESTRA que está al lado. Es solo un ejemplo:
-//    el botón de verdad lo tiene que empujar la persona.
+//    índice el botón de verdad, solo de forma visual (no lo activa), dos
+//    veces; después lo tiene que empujar la persona.
 //  · DemoPinza (justo después de colocar la oficina, sobre la mesa):
 //    la mano acerca el pulgar y el índice a una botella, la botella se
-//    ilumina (hover), la agarra con la pinza, la lleva y la suelta.
+//    ilumina (hover), la agarra con la pinza, la lleva y la suelta (dos
+//    veces, o hasta que la persona agarra algo).
 //
 // Las poses (abierta, pinza y señalar) se tomaron de una mano derecha
 // del emulador de Quest de IWSDK, en coordenadas de la muñeca.
@@ -15,7 +16,7 @@
 import { CylinderGeometry, Group, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from '@iwsdk/core';
 import { Objeto } from './objetos.js';
 import { GROSOR_LINEA, MATERIAL_LINEA, PiezasMano, type DatosMano } from './oclusion.js';
-import { BOTON, Boton3D, FUENTE, Lienzo, lineas } from './ui.js';
+import { type Boton3D, FUENTE, Lienzo, lineas } from './ui.js';
 
 // prettier-ignore
 const ABIERTA = [0,0,0,-0.0302,-0.0161,-0.0345,-0.051,-0.0267,-0.0572,-0.0727,-0.0329,-0.0823,-0.0868,-0.0403,-0.1011,-0.0198,-0.0095,-0.0365,-0.0236,-0.0073,-0.096,-0.0299,-0.0087,-0.1334,-0.0335,-0.0152,-0.1565,-0.0354,-0.0218,-0.1778,-0.0036,-0.0077,-0.0343,-0.0017,-0.0025,-0.0956,0.0035,-0.0017,-0.1383,0.0066,-0.0096,-0.1645,0.0098,-0.0164,-0.1883,0.015,-0.006,-0.0348,0.0175,-0.0065,-0.0887,0.0265,-0.0028,-0.1264,0.0316,-0.0076,-0.1521,0.0348,-0.0132,-0.1756,0.023,-0.0094,-0.0341,0.0351,-0.0137,-0.0779,0.0478,-0.0116,-0.1058,0.0557,-0.0169,-0.1237,0.0622,-0.0219,-0.1441];
@@ -101,50 +102,68 @@ function leyenda(titulo: string, texto: string): Lienzo {
   return l;
 }
 
-/** Ejemplo de cómo se empuja un botón con la punta del índice (botón de muestra). */
+/**
+ * Ejemplo de cómo se empuja un botón con la punta del índice: la mano de
+ * ejemplo empuja el botón de VERDAD ("Colocar aquí") solo de forma visual
+ * (se hunde, pero no hace nada). Se ve dos veces y se esconde; el botón lo
+ * tiene que empujar la persona.
+ */
 export class DemoBoton {
   readonly grupo = new Group();
   private mano = new ManoEjemplo();
-  private boton = new Boton3D('Ejemplo', 0.12, 0.045, BOTON.secundario);
   private t = 0;
   private punta = new Vector3();
+  private cerca = new Vector3();
   private lejos = new Vector3(0.05, -0.03, 0.14);
+  /** Vueltas que lleva (se esconde después de dos). */
+  vueltas = 0;
 
-  constructor() {
-    this.grupo.add(this.boton.grupo, this.mano.grupo);
-    const l = leyenda('Así se presiona', 'Empuja el botón con la punta del índice. ¡Ahora hazlo tú con "Colocar aquí"!');
-    l.malla.position.set(0, 0.11, 0);
+  constructor(private boton: Boton3D) {
+    this.grupo.add(this.mano.grupo);
+    const l = leyenda('Así se presiona', 'Empuja el botón con la punta del índice. ¡Ahora hazlo tú!');
+    l.malla.position.set(0.22, 0.02, 0);
     this.grupo.add(l.malla);
   }
 
+  reiniciar(): void {
+    this.t = 0;
+    this.vueltas = 0;
+    this.grupo.visible = true;
+  }
+
+  /** Llamar después de la interacción de las manos (para que el hundido del ejemplo no se pierda). */
   actualizar(dt: number): void {
-    const DURACION = 3.8;
-    this.t = (this.t + dt) % DURACION;
+    if (!this.grupo.visible) {
+      return;
+    }
+    const DURACION = 3.4;
+    this.t += dt;
+    if (this.t >= DURACION) {
+      this.t -= DURACION;
+      this.vueltas++;
+      if (this.vueltas >= 2) {
+        this.grupo.visible = false;
+        this.boton.hundir(0);
+        return;
+      }
+    }
     const t = this.t;
     const cara = this.boton.grosor;
-    // Profundidad del dedo respecto a la cara del botón (negativo = empujando).
-    let z: number;
     const p = this.punta;
+    this.cerca.set(0, 0, cara + 0.03);
     if (t < 1.0) {
-      p.copy(this.lejos).lerp(this.v0.set(0, 0, cara + 0.03), suave(t));
+      p.copy(this.lejos).lerp(this.cerca, suave(t));
     } else if (t < 1.8) {
       const k = t < 1.35 ? suave((t - 1.0) / 0.35) : 1 - suave((t - 1.45) / 0.35);
-      z = cara + 0.03 - k * 0.045;
-      p.set(0, 0, z);
+      p.set(0, 0, cara + 0.03 - k * 0.045);
     } else if (t < 2.8) {
-      p.set(0, 0, cara + 0.03).lerp(this.lejos, suave(t - 1.8));
+      p.copy(this.cerca).lerp(this.lejos, suave(t - 1.8));
     } else {
       p.copy(this.lejos);
     }
     this.boton.hundir(Math.max(0, cara - p.z));
-    if (t > 1.3 && t < 1.32) {
-      this.boton.tocadoEn = t;
-    }
-    this.boton.pintar(t);
     this.mano.poner(SENALAR, SENALAR, 0, GIRO_SENALAR, [9], p);
   }
-
-  private v0 = new Vector3();
 }
 
 /** Ejemplo de cómo se agarra con la pinza: hover, pinza, llevar y soltar. */
@@ -158,7 +177,7 @@ export class DemoPinza {
   private w = new Vector3();
   private inicio = new Vector3(0.1, 0.13, 0.06);
   private alto = new Vector3(-0.06, 0.12, 0.02);
-  /** Vueltas que lleva (se esconde sola después de unas cuantas). */
+  /** Vueltas que lleva (se esconde después de dos). */
   vueltas = 0;
 
   constructor() {

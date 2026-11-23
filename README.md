@@ -45,9 +45,10 @@ Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Salt
   el reloj y la caneca de descarte a su izquierda, hacia el frente; la pila de cajas (máx. 8), la
   zona de trabajo y la caja del pedido; a la derecha el camión de la Cruz Roja (la caja entra por
   sus puertas traseras) y el botón **Despachar**.
-- **Ejemplos:** junto a "Colocar aquí", una mano de ejemplo empuja con el índice un botón de muestra
-  (el de verdad lo empuja la persona). Justo después de colocar la oficina, sobre la mesa, otra mano
-  de ejemplo muestra cómo se agarra con la pinza (unas vueltas o hasta que se agarra algo). Las manos reales se ven tal cual, con una línea blanca fina alrededor (como en el Quest).
+- **Ejemplos (dos veces cada uno):** al inicio, una mano de ejemplo empuja con el índice el botón
+  "Colocar aquí" solo de forma visual (después lo empuja la persona). Justo después de colocar la
+  oficina, sobre la mesa, otra mano de ejemplo muestra cómo se agarra con la pinza (o hasta que se
+  agarra algo). Las manos reales se ven tal cual, con una línea blanca fina alrededor (como en el Quest).
 - **Pedidos por producto** (subcategoría): "2 higiene bucal", "1 agua"…; solo vale ese producto.
 - **Oclusión:** la mano real tapa lo virtual a ras: una mano invisible con las articulaciones y radios reales de WebXR;
   la malla genérica de la mano no se dibuja, así los objetos no cambian de color ni de forma.

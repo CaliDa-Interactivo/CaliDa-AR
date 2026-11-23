@@ -209,6 +209,23 @@
       </div>
       <p id="webxr">Comprobando WebXR…</p>
     </div>
+    <script>
+      // Después de publicar una versión nueva, el navegador puede tener la
+      // página vieja en caché, que pide un archivo de código que ya no existe.
+      // Si el código no carga, se recarga una vez saltándose la caché.
+      window.addEventListener(
+        'error',
+        function (e) {
+          var t = e.target;
+          if (!t || t.tagName !== 'SCRIPT') return;
+          var url = new URL(location.href);
+          if (url.searchParams.has('recarga')) return;
+          url.searchParams.set('recarga', String(Date.now()));
+          location.replace(url.toString());
+        },
+        true,
+      );
+    </script>
     <script type="module" src="/src/index.ts"></script>
   </body>
 </html>

@@ -632,10 +632,10 @@ export class MultiSystem extends OficinaSystem {
 
   // ---- Cada cuadro ---------------------------------------------------
 
-  update(delta: number): void {
+  protected cuadro(delta: number): void {
     const dt = Math.min(delta, 0.05);
     this.sincronizar(dt);
-    super.update(delta);
+    super.cuadro(delta);
     // El anfitrión envía el estado 4 veces por segundo.
     if (this.red.anfitrion) {
       this.tEnvio -= dt;

@@ -23,6 +23,15 @@ const botonEntrarMulti = $<HTMLButtonElement>('entrar-multi');
 const botonVolver = $<HTMLButtonElement>('volver-modo');
 
 const parametros = new URLSearchParams(window.location.search);
+
+// Errores visibles en la pantalla de entrada (para reportarlos desde las gafas).
+const mostrarError = (texto: string) => {
+  estadoWebXR.textContent = `Error: ${texto}`;
+  estadoWebXR.style.color = '#CC0100';
+};
+window.addEventListener('error', (e) => mostrarError(e.message));
+window.addEventListener('unhandledrejection', (e) => mostrarError(String((e.reason as Error)?.message ?? e.reason)));
+estadoWebXR.textContent = 'Cargando la experiencia…';
 // ?prueba: recorrido con el mouse en el computador, sin la pantalla de entrada.
 const enPrueba = parametros.has('prueba');
 
@@ -39,7 +48,9 @@ const fuentes = Promise.race([
   new Promise((listo) => setTimeout(listo, 4000)),
 ]).catch(() => undefined);
 
-fuentes.then(() => World.create($<HTMLDivElement>('scene-container'), projectOptions)).then(async (world) => {
+const mundo = fuentes.then(() => World.create($<HTMLDivElement>('scene-container'), projectOptions));
+mundo.catch((e: unknown) => mostrarError(`no se pudo cargar (${(e as Error)?.message ?? e}). Recarga la página.`));
+mundo.then(async (world) => {
   // Nitidez en el Quest 3 (antes de abrir la sesión): un poco más de
   // resolución que la predeterminada y foveación suave, para que los textos
   // de los paneles laterales y las etiquetas de la estantería se lean bien.

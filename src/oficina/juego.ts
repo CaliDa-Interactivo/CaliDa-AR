@@ -1403,7 +1403,36 @@ export class OficinaSystem extends createSystem({}) {
 
   // ---- Cada cuadro ---------------------------------------------------
 
+  /**
+   * Cada cuadro, protegido: si algo falla, la escena sigue dibujándose (no
+   * se congela la sesión de RA) y el gato muestra el error para poder
+   * reportarlo desde las gafas.
+   */
   update(delta: number): void {
+    try {
+      this.cuadro(delta);
+    } catch (e) {
+      this.reportarError(e);
+    }
+  }
+
+  private erroresVistos = new Set<string>();
+
+  protected reportarError(e: unknown): void {
+    const texto = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    if (this.erroresVistos.has(texto)) {
+      return;
+    }
+    this.erroresVistos.add(texto);
+    console.error('[CaliDa RA]', e);
+    try {
+      this.gato.decir(texto.slice(0, 160), 'Error (toma una foto)');
+    } catch {
+      // Si ni el gato puede hablar, queda en la consola.
+    }
+  }
+
+  protected cuadro(delta: number): void {
     const dt = Math.min(delta, 0.05);
     this.tiempo += dt;
     if (this.reinicioEn >= 0 && this.tiempo >= this.reinicioEn) {

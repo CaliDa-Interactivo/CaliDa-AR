@@ -548,10 +548,23 @@ export function crearMonitor(ancho: number, alto: number): Group {
     if (!m.isMesh) {
       return;
     }
-    const mat = m.material as Material;
-    if (mat && !Array.isArray(mat) && mat.name.startsWith('monitor_screen')) {
-      m.material = fondo;
+    const mat = m.material as MeshStandardMaterial;
+    if (!mat || Array.isArray(mat)) {
+      return;
     }
+    if (mat.name.startsWith('monitor_screen')) {
+      m.material = fondo;
+      return;
+    }
+    // Material estándar y mate (el original trae barniz y extensiones que
+    // pesan más en el Quest).
+    m.material = new MeshStandardMaterial({
+      name: mat.name,
+      color: mat.color,
+      map: mat.map ?? null,
+      roughness: Math.max(0.5, mat.roughness ?? 0.6),
+      metalness: Math.min(0.3, mat.metalness ?? 0),
+    });
   });
   g.add(escena);
   return g;

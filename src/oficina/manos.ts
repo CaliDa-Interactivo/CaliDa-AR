@@ -1,22 +1,22 @@
 // ============================================================
-// manos.ts — lectura de las manos con WebXR, SIN pellizco.
+// manos.ts — lectura de las manos con WebXR: PINZA sin rayos.
 //
-//  · Agarrar: puño o agarre completo. Se mide la distancia promedio
-//    de las puntas de los dedos (índice, medio, anular y meñique)
-//    al centro de la palma: menos de ~4,5 cm = mano cerrada; más de
-//    ~6,5 cm = abierta (dos umbrales para que no parpadee).
-//  · La palma "de canto" (vertical) junto a un objeto lo resalta;
-//    al cerrar el puño se agarra.
+//  · Agarrar: pinza entre la punta del pulgar y la del índice.
+//    Menos de ~1,8 cm = pinza cerrada; más de ~3,5 cm = abierta (dos
+//    umbrales para que no parpadee). El punto de la pinza (entre las
+//    dos puntas) es lo que toca los objetos: cerca de uno lo resalta
+//    (hover) y al cerrar la pinza se agarra. No hay rayos.
 //  · Empujar botones: la punta del índice (poke).
-//  · Respaldo con controles del Quest: el gatillo lateral (squeeze)
-//    cierra la "mano" y la punta del control hace de índice.
+//  · Respaldo con controles del Quest: el gatillo (o el gatillo
+//    lateral) cierra la pinza y la punta del control hace de índice.
 //
 // Todo en el espacio del mundo (el jugador está en el origen).
 // ============================================================
 import { Quaternion, Vector3 } from '@iwsdk/core';
 
-const CIERRA = 0.045;
-const ABRE = 0.065;
+/** Distancia pulgar–índice para cerrar y para abrir la pinza (m). */
+const CIERRA = 0.018;
+const ABRE = 0.035;
 
 export type TipoMano = 'mano' | 'control' | 'mouse';
 
@@ -30,7 +30,7 @@ export class Mano {
   readonly giro = new Quaternion();
   /** Hacia dónde mira la palma (sale de ella). */
   readonly normal = new Vector3(0, -1, 0);
-  /** Dónde va lo que se lleva: centro de la palma, un poco hacia los nudillos y afuera. */
+  /** Punto de la pinza (entre las puntas del pulgar y el índice): toca y lleva los objetos. */
   readonly agarre = new Vector3();
   cerrada = false;
   recienCerrada = false;
@@ -54,13 +54,6 @@ export class Mano {
     void motor?.pulse?.(fuerza, ms);
   }
 }
-
-const PUNTAS: XRHandJoint[] = [
-  'index-finger-tip',
-  'middle-finger-tip',
-  'ring-finger-tip',
-  'pinky-finger-tip',
-];
 
 export class Manos {
   readonly izquierda = new Mano('left');
@@ -105,27 +98,16 @@ export class Manos {
     const muneca = pose('wrist');
     const base = pose('middle-finger-metacarpal');
     const indice = pose('index-finger-tip');
-    const nudillo = pose('middle-finger-phalanx-proximal');
     if (!muneca || !base || !indice) {
+      return false;
+    }
+    const pulgar = pose('thumb-tip');
+    if (!pulgar) {
       return false;
     }
     const bp = base.transform.position;
     const mp = muneca.transform.position;
     this.p.set((bp.x * 2 + mp.x) / 3, (bp.y * 2 + mp.y) / 3, (bp.z * 2 + mp.z) / 3);
-    let suma = 0;
-    let n = 0;
-    for (const punta of PUNTAS) {
-      const pp = pose(punta);
-      if (pp) {
-        const t = pp.transform.position;
-        suma += this.v.set(t.x, t.y, t.z).distanceTo(this.p);
-        n++;
-      }
-    }
-    if (n < 3) {
-      return false;
-    }
-    const promedio = suma / n;
     mano.tipo = 'mano';
     mano.presente = true;
     mano.palma.copy(this.p);
@@ -135,14 +117,12 @@ export class Manos {
     mano.giro.set(o.x, o.y, o.z, o.w);
     // En las articulaciones de WebXR el eje -Y sale de la palma.
     mano.normal.set(0, -1, 0).applyQuaternion(mano.giro);
-    const np = nudillo?.transform.position ?? bp;
-    mano.agarre
-      .set(np.x, np.y, np.z)
-      .sub(this.p)
-      .multiplyScalar(0.55)
-      .add(this.p)
-      .addScaledVector(mano.normal, 0.035);
-    mano.fijarCerrada(mano.cerrada ? promedio < ABRE : promedio < CIERRA);
+    // Pinza: punto medio entre las puntas del pulgar y el índice.
+    const tp = pulgar.transform.position;
+    this.v.set(tp.x, tp.y, tp.z);
+    const distancia = this.v.distanceTo(mano.indice);
+    mano.agarre.copy(this.v).add(mano.indice).multiplyScalar(0.5);
+    mano.fijarCerrada(mano.cerrada ? distancia < ABRE : distancia < CIERRA);
     return true;
   }
 
@@ -161,12 +141,12 @@ export class Manos {
     mano.palma.set(t.position.x, t.position.y, t.position.z);
     mano.giro.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
     mano.normal.set(0, 0, -1).applyQuaternion(mano.giro);
-    mano.agarre.copy(mano.palma);
     // La "punta del índice" es la punta del control (6 cm hacia adelante).
     mano.indice.set(0, -0.01, -0.06).applyQuaternion(mano.giro).add(mano.palma);
-    // Gatillo lateral (botón 1 del perfil xr-standard) = cerrar la mano.
-    const lateral = fuente.gamepad?.buttons[1]?.pressed ?? false;
-    mano.fijarCerrada(lateral);
+    mano.agarre.set(0, 0, -0.04).applyQuaternion(mano.giro).add(mano.palma);
+    // Gatillo (botón 0) o gatillo lateral (botón 1) = cerrar la pinza.
+    const boton = fuente.gamepad?.buttons;
+    mano.fijarCerrada(!!(boton?.[0]?.pressed || boton?.[1]?.pressed));
     return true;
   }
 }

@@ -156,7 +156,7 @@ export class OficinaSystem extends createSystem({}) {
       // Sin el sistema de profundidad registrado: queda la mano como oclusor.
     }
     this.oclusion = new Oclusion(mundo, this.escena.raiz, this.raizEnt);
-    // Sin rayos ni pellizco de IWSDK: todo con puño e índice.
+    // Sin rayos ni agarres de IWSDK: pinza propia (pulgar e índice) y botones con el índice.
     for (const lado of ['left', 'right'] as const) {
       const mp = this.input.xr.multiPointers[lado];
       mp.toggleSubPointer('ray', false);
@@ -536,7 +536,7 @@ export class OficinaSystem extends createSystem({}) {
     sonidos.soltar();
     this.registrarCaja(caja);
     if (!this.trabajo) {
-      this.pista('tomar', 'Cierra la mano sobre una caja de la pila y llévala al centro de la mesa.', PILA[0]);
+      this.pista('tomar', 'Acerca la pinza (pulgar e índice) a una caja de la pila: cuando se ilumine, ciérrala y lleva la caja al centro de la mesa.', PILA[0]);
     }
   }
 
@@ -575,7 +575,7 @@ export class OficinaSystem extends createSystem({}) {
           caja.estado = 'trabajo';
           this.trabajo = caja;
           this.anim.mover(caja.grupo, TRABAJO.clone(), 0.25);
-          this.pista('abrir', 'Agarra la tapa con la mano cerrada y jálala hacia arriba para abrir la caja.', TRABAJO);
+          this.pista('abrir', 'Agarra la tapa con la pinza y jálala hacia arriba para abrir la caja.', TRABAJO);
         } else {
           caja.estado = 'pila';
           this.pila.push(caja);
@@ -677,7 +677,7 @@ export class OficinaSystem extends createSystem({}) {
     Object.defineProperty(tapa, 'obj', { get: () => this.trabajo?.armada.tapa ?? e.sobre });
     this.inter.agarrables.push(tapa);
 
-    // La caja abierta: cada vez que se cierra la mano adentro sale un objeto.
+    // La caja abierta: cada vez que se cierra la pinza adentro sale un objeto.
     const abierta: Agarrable = {
       obj: new Group(),
       palmaLibre: true,
@@ -687,7 +687,7 @@ export class OficinaSystem extends createSystem({}) {
         const dato = caja.objetos.shift()!;
         this.pintarMinis(caja);
         const oj = this.nuevoObjeto(dato.cat, dato.danado, 'caja', dato.sub);
-        oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.palma)));
+        oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.agarre)));
         this.actual = oj;
         this.explicarManual();
         if (dato.danado) {
@@ -719,13 +719,13 @@ export class OficinaSystem extends createSystem({}) {
         activo: () => this.fase === 'jornada' && e.repisa.cantidades[i] > 0,
         tomar: (mano) => {
           // Del producto (columna) donde está la mano.
-          const sub = e.repisa.productoEn(i, e.repisa.grupo.worldToLocal(this.w.copy(mano.palma)));
+          const sub = e.repisa.productoEn(i, e.repisa.grupo.worldToLocal(this.w.copy(mano.agarre)));
           const r = this.repisaQuitar(i, sub);
           if (!r) {
             return null;
           }
           const oj = this.nuevoObjeto(cat.id, r.danado, 'repisa', r.sub);
-          oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.palma)));
+          oj.o.grupo.position.copy(e.sobre.worldToLocal(this.v.copy(mano.agarre)));
           return oj.o.grupo;
         },
         destino: (obj) => this.destinoObjeto(this.deGrupo(obj)),
@@ -998,7 +998,7 @@ export class OficinaSystem extends createSystem({}) {
     });
     if (completo(p)) {
       this.gato.decir(`¡Pedido de ${p.municipio} completo! Lleva la caja al camión y empuja "Despachar".`);
-      this.pista('camion', 'Agarra la caja del pedido y ponla en la plataforma del camión.', this.escena.camion.position);
+      this.pista('camion', 'Agarra la caja del pedido con la pinza y ponla en la parte de atrás del camión.', this.escena.camion.position);
     }
   }
 
@@ -1151,7 +1151,7 @@ export class OficinaSystem extends createSystem({}) {
       panel.verAvisos();
       sonidos.logro();
       this.gato.decir(`Destino: ${p.municipio}. Saca de la repisa ${textoPedido(p, false)} y ponlo en la caja del pedido.`);
-      this.pista('armar', 'Cierra la mano sobre una fila de la repisa para sacar un objeto y suéltalo en la caja del pedido.', PEDIDO);
+      this.pista('armar', 'Haz la pinza sobre un producto de la estantería para sacarlo y suéltalo en la caja del pedido.', PEDIDO);
     };
     panel.mover.alPresionar = () => {
       if (this.fase !== 'jornada') {

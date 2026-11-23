@@ -2,10 +2,10 @@
 // escena.ts — la oficina del centro de acopio, en forma de U
 // alrededor del jugador (que está en el origen, mirando a -Z):
 //
-//   · Izquierda: el panel de avisos (tipo tablet) y el gato.
-//   · Frente: la repisa de 6 categorías sobre la mesa; delante, la
-//     pila de cajas, la zona de trabajo, la caja del pedido y la
-//     caneca de descarte.
+//   · Izquierda: el panel de avisos (en el monitor del computador).
+//   · Frente: la góndola de 5 categorías con el gato encima y la caneca
+//     de descarte a su izquierda; delante, la pila de cajas, la zona de
+//     trabajo y la caja del pedido.
 //   · Derecha: el camión de la Cruz Roja y el botón de despacho.
 //
 // Todo lo que va sobre las mesas cuelga de `sobre`, cuyo y = 0 es
@@ -14,8 +14,8 @@
 //
 // Ergonomía (se calibra al colocar, de pie): estatura ≈ ojos / 0,93.
 //   · Mesa: codo (0,63 × estatura) menos 7,5 cm.
-//   · Estantería: sus filas entre la cadera (0,5) y los hombros (0,82);
-//     se achica si hace falta, nunca queda por encima de los ojos.
+//   · Góndola: sobre la mesa (sobre la cadera); la bandeja de arriba bajo
+//     la línea de los ojos. Se achica como mucho al 80 % (productos grandes).
 //   · Paneles: a 70 cm, el centro 12,5° por debajo de los ojos y
 //     mirando a la persona.
 //   · Lo que se agarra, a 35–60 cm del pecho (la persona está en el
@@ -32,10 +32,10 @@ import {
   Vector3,
   type Object3D,
 } from '@iwsdk/core';
-import { PLATAFORMA, crearCamion, sombra } from './objetos.js';
+import { PLATAFORMA, crearCamion, crearMonitor, sombra } from './objetos.js';
 import { COLOR } from './datos.js';
-import { Panel } from './panel.js';
-import { ALTO_REPISA, Repisa } from './repisa.js';
+import { ALTO_PANEL, ANCHO_PANEL, Panel } from './panel.js';
+import { ALTO_REPISA, ANCHO_REPISA, Repisa } from './repisa.js';
 import { BOTON, Boton3D, Lienzo } from './ui.js';
 
 const mate = (color: string) => new MeshStandardMaterial({ color, roughness: 0.88 });
@@ -50,7 +50,8 @@ const MESAS: [number, number, number, number][] = [
 export const PILA = [new Vector3(-0.33, 0, -0.4), new Vector3(-0.14, 0, -0.4)];
 export const TRABAJO = new Vector3(0.1, 0, -0.41);
 export const PEDIDO = new Vector3(0.4, 0, -0.41);
-export const CANECA = new Vector3(-0.48, 0, -0.32);
+/** Caneca de descarte: justo al lado izquierdo de la góndola. */
+export const CANECA = new Vector3(-ANCHO_REPISA / 2 - 0.075, 0, -0.6);
 export const ESCALA_CAJA = 0.7;
 /** El gato encima de la estantería, un poco más pequeño. */
 export const ESCALA_GATO = 0.7;
@@ -58,7 +59,7 @@ export const ALTO_CAJA = 0.14 * ESCALA_CAJA;
 const CAMION = new Vector3(0.64, 0, -0.42);
 const BOTON_DESPACHO = new Vector3(0.64, 0, -0.1);
 /** Estantería: lo más cerca posible sin tapar la zona de trabajo. */
-const Z_REPISA = -0.62;
+const Z_REPISA = -0.64;
 /** Ángulos (grados, positivo a la izquierda) de los paneles alrededor de la persona. */
 export const ANGULO = { panel: 58, derecha: -58, mensajes: 96, resumen: 0 };
 const DISTANCIA_PANEL = 0.7;
@@ -105,7 +106,7 @@ export class Escena {
     // Estantería de la página al fondo de la mesa del frente.
     this.repisa.grupo.position.set(0, 0, Z_REPISA);
     this.sobre.add(this.repisa.grupo);
-    const sombraRepisa = sombra(1.1, 0.25, 0.25);
+    const sombraRepisa = sombra(ANCHO_REPISA * 1.1, 0.36, 0.25);
     sombraRepisa.position.set(0, 0.002, Z_REPISA);
     this.sobre.add(sombraRepisa);
 
@@ -140,7 +141,9 @@ export class Escena {
     this.letreroPedido.malla.position.set(PEDIDO.x, 0.2, PEDIDO.z);
     this.sobre.add(this.letreroPedido.malla);
 
-    // Panel de avisos a la izquierda.
+    // Panel de avisos a la izquierda, en la pantalla del monitor del computador
+    // (la interfaz es la misma: solo cambia el contenedor).
+    this.panel.grupo.add(crearMonitor(ANCHO_PANEL * 1.03, ALTO_PANEL * 1.03));
     this.sobre.add(this.panel.grupo);
     this.ubicar(this.panel.grupo, ANGULO.panel);
 
@@ -242,12 +245,14 @@ export class Escena {
     // Mesa: a la altura del codo menos 7,5 cm.
     this.alto = Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
     this.sobre.position.y = this.alto;
-    // Estantería: la fila de arriba (con sus productos) no pasa de los hombros.
-    const hombros = 0.82 * estatura;
-    const k = Math.min(1, Math.max(0.55, (hombros - this.alto - 0.06) / this.repisa.alturaFilaArriba));
+    // Góndola: la bandeja de arriba queda bajo la línea de los ojos (sus
+    // productos no tapan la vista). Se achica solo un poco si hace falta,
+    // para que los productos sigan viéndose grandes.
+    const techo = Math.min(this.ojos - 0.1, 0.9 * estatura);
+    const k = Math.min(1, Math.max(0.8, (techo - this.alto) / this.repisa.alturaFilaArriba));
     this.repisa.grupo.scale.setScalar(k);
-    // Reloj al frente del techo de la estantería, donde el gato pone los pies.
-    this.reloj.malla.position.set(0, ALTO_REPISA * k + 0.022, Z_REPISA + 0.105 * k);
+    // Reloj al frente del techo de la góndola, donde el gato pone los pies.
+    this.reloj.malla.position.set(0, ALTO_REPISA * k + 0.022, Z_REPISA + (this.repisa.frente + 0.01) * k);
     // Paneles a la altura de la vista.
     this.ubicados.forEach((u, obj) => this.ponerPanel(obj, u.angulo, u.distancia));
     return this.alto;

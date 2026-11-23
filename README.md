@@ -24,32 +24,37 @@ espacio de referencia.
 
 ## Controles
 
-Sin pellizco y sin rayos: todo con las manos.
+Con **pinza** y sin rayos: todo con las manos.
 
 | Acción | Cómo |
 | --- | --- |
-| Resaltar un objeto | Pon la palma **de canto** (vertical) junto a él: contorno blanco |
-| Agarrar | Cierra el **puño** (las puntas a menos de 4,5 cm del centro de la palma) |
-| Soltar | Abre la mano (más de 6,5 cm). Encaja en un puesto válido (verde) o cae a la mesa o al piso |
+| Resaltar un objeto (hover) | Acerca la pinza (pulgar e índice) a menos de 5 cm: contorno blanco |
+| Agarrar | Junta el **pulgar y el índice** (menos de 1,8 cm) |
+| Soltar | Separa los dedos (más de 3,5 cm). Encaja en un puesto válido (verde) o cae a la mesa o al piso |
 | Botones | Empújalos con la **punta del índice**: se hunden hasta 1,5 cm |
-| Con controles | Gatillo lateral = cerrar la mano |
+| Con controles | Gatillo (o gatillo lateral) = cerrar la pinza |
 | Computador (`?prueba`) | Arrastrar y hacer clic con el mouse, sin pantalla de entrada |
 
 Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Saltar tutorial**.
 
 ## El juego
 
-- **Oficina en U** flotante (sin patas): a la izquierda el panel de avisos; al frente la estantería de
-  la página (5 categorías, tope 30, alerta en 25) con el gato encima y el reloj a sus pies, la pila de
-  cajas (máx. 8), la zona de trabajo, la caja del pedido y la caneca de descarte; a la derecha el
-  camión de la Cruz Roja y el botón **Despachar**.
+- **Oficina en U** flotante (sin patas): a la izquierda el panel de avisos en la pantalla de un
+  monitor; al frente una **góndola de supermercado** con una bandeja por categoría (tope 30, alerta
+  en 25), los productos grandes, de frente y en fila (primero adelante y después hacia atrás), sus
+  etiquetas en el riel y las placas de las categorías a la izquierda; el gato encima con el reloj, la
+  caneca de descarte justo a la izquierda de la góndola, la pila de cajas (máx. 8), la zona de
+  trabajo y la caja del pedido; a la derecha el camión de la Cruz Roja y el botón **Despachar**.
+- **Oclusión:** la profundidad del Quest 3 recorta lo virtual a ras de la mano real (modo MinMax);
+  la malla genérica de la mano no se dibuja, así los objetos no cambian de color ni de forma.
 - **Flujo:** campana → aviso → llegan cajas → quitar la tapa → revisar cada objeto a mano (contorno
   rojo y letrero = dañado) → a su compartimiento o a la caneca. Llegan pedidos de municipios del Valle
   del Cauca con reloj → aceptar → elegir municipio → llenar la caja desde la estantería → al camión →
   Despachar.
 - **Inventario inicial:** Alimento 10, Aseo 9, Ropa 26, Medicamentos 7, Construcción 6.
 - **Cada día** tiene más cajas, más dañados (15 % → 35 %), relojes más cortos y urgencias por lluvias
-  o inundaciones. Al final, resumen con estrellas y **Continuar** / **Finalizar experiencia** (el
+  o inundaciones. Entre los eventos grandes llegan cajas sueltas y **encargos rápidos** (pedidos de 1
+  o 2 cosas) para que siempre haya algo que hacer. Al final, resumen con estrellas y **Continuar** / **Finalizar experiencia** (el
   viernes solo Finalizar). El resumen total lleva a **Volver al inicio**.
 - **Tutorial** el lunes con pistas del gato y una flecha.
 
@@ -117,9 +122,9 @@ npx -y @gltf-transform/cli@4.1.1 simplify --ratio 0.1 --error 0.01 entrada.glb s
 | `src/oficina/datos.ts` | Categorías, productos, jornadas, municipios |
 | `src/oficina/modelo.ts` | Aviso, Pedido, Cuenta, estrellas |
 | `src/oficina/escena.ts` | Oficina en U y ergonomía |
-| `src/oficina/repisa.ts` | Estantería, columnas, placas y etiquetas |
-| `src/oficina/objetos.ts` | Productos, contorno, daño, caja, camión y sombras |
-| `src/oficina/manos.ts` · `interaccion.ts` | Puño, palma, índice; agarrar, soltar, gravedad, botones |
+| `src/oficina/repisa.ts` | Góndola, bandejas, placas y etiquetas |
+| `src/oficina/objetos.ts` | Productos, contorno, daño, caja, camión (`camion.glb`), monitor (`escritorio.glb`) y sombras |
+| `src/oficina/manos.ts` · `interaccion.ts` | Pinza, índice; hover, agarrar, soltar, gravedad, botones |
 | `src/oficina/oclusion.ts` | Profundidad, oclusor de mano y objeto siempre encima |
 | `src/oficina/ui.ts` · `panel.ts` | Lienzos, botones 3D, panel de avisos |
 | `src/oficina/juego.ts` | `OficinaSystem` (un jugador) |

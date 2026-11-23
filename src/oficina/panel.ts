@@ -1,5 +1,5 @@
 // ============================================================
-// panel.ts — el panel de la izquierda (tipo tablet): campana con
+// panel.ts — el panel de la izquierda (en la pantalla del monitor): campana con
 // el número rojo de avisos pendientes, día y hora, y una lista de
 // avisos con UN botón de acción cada uno:
 //   · "Llegaron 3 cajas"                   → Recibidas
@@ -16,6 +16,7 @@ import { BOTON, Boton3D, FUENTE, Lienzo, fondoPanel, lineas, rect, textoAjustado
 const PX_ANCHO = 1100;
 const PX_ALTO = 850;
 export const ANCHO_PANEL = 0.44;
+export const ALTO_PANEL = (ANCHO_PANEL * PX_ALTO) / PX_ANCHO;
 const S = ANCHO_PANEL / PX_ANCHO; // metros por píxel
 const TARJETAS = 3;
 const Y_TARJETA = 150;
@@ -88,8 +89,8 @@ export class Panel {
     this.volver = new Boton3D('Volver', 0.1, 0.036, BOTON.secundario);
     this.colocar(this.volver, 960, 800);
     this.volver.alPresionar = () => this.verAvisos();
-    // Debajo del panel (el menú): mover la oficina, recalibrar la altura y saltar el tutorial.
-    const yMenu = -ANCHO_PANEL * (PX_ALTO / PX_ANCHO) / 2 - 0.035;
+    // Debajo del monitor (el menú): mover la oficina, recalibrar la altura y saltar el tutorial.
+    const yMenu = -ALTO_PANEL / 2 - 0.05;
     this.mover = new Boton3D('Mover oficina', 0.135, 0.036, BOTON.secundario);
     this.mover.grupo.position.set(-0.145, yMenu, 0);
     this.grupo.add(this.mover.grupo);

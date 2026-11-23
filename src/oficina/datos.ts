@@ -181,9 +181,10 @@ export interface Jornada {
 
 /**
  * Cada día llegan más cajas, hay más objetos dañados, los relojes son más
- * cortos y aparecen más urgencias.
+ * cortos y aparecen más urgencias. (Base: a esto se le suman las tareas
+ * rápidas de `conMasTareas`.)
  */
-export const JORNADAS: Jornada[] = [
+const JORNADAS_BASE: Jornada[] = [
   {
     // Lunes (incluye el tutorial)
     duracion: 270,
@@ -301,6 +302,48 @@ export const JORNADAS: Jornada[] = [
     ],
   },
 ];
+
+/**
+ * Más tareas para trabajar más rápido: entre los eventos grandes llegan
+ * cajas sueltas y ENCARGOS RÁPIDOS (pedidos pequeños de 1 o 2 cosas con un
+ * reloj corto), así siempre hay algo que hacer. Lunes desde el minuto 2
+ * (después del tutorial); cada día empiezan antes y son más seguidos.
+ */
+function conMasTareas(j: Jornada, dia: number): Jornada {
+  const eventos = [...j.eventos];
+  const libre = (tipo: Evento['tipo'], en: number) => !eventos.some((e) => e.tipo === tipo && Math.abs(e.en - en) < 15);
+  const orden: IdCategoria[] = ['alimento', 'aseo', 'medicamentos', 'ropa', 'construccion'];
+  const fin = j.duracion - 35;
+  // Cajas sueltas.
+  const cadaCaja = 48 - dia * 4;
+  for (let t = dia === 0 ? 145 : 30, k = 0; t < fin; t += cadaCaja, k++) {
+    if (libre('cajas', t)) {
+      eventos.push({ tipo: 'cajas', en: t, cantidad: dia >= 3 && k % 2 === 0 ? 2 : 1 });
+    }
+  }
+  // Encargos rápidos.
+  const cadaEncargo = 44 - dia * 3;
+  for (let t = dia === 0 ? 150 : 45, k = 0; t < fin; t += cadaEncargo, k++) {
+    if (!libre('pedido', t)) {
+      continue;
+    }
+    const a = orden[(dia + k) % orden.length];
+    const b = orden[(dia + k + 2) % orden.length];
+    const pide: Partial<Record<IdCategoria, number>> = k % 2 === 0 ? { [a]: 2 } : { [a]: 1, [b]: 1 };
+    eventos.push({
+      tipo: 'pedido',
+      en: t,
+      municipio: MUNICIPIOS[(dia * 7 + k * 5 + 3) % MUNICIPIOS.length],
+      pide,
+      plazo: 75 - dia * 4,
+      familias: 2,
+    });
+  }
+  eventos.sort((x, y) => x.en - y.en);
+  return { ...j, eventos };
+}
+
+export const JORNADAS: Jornada[] = JORNADAS_BASE.map(conMasTareas);
 
 /** Inventario con que abre el centro el lunes (Ropa casi llena a propósito). */
 export const INVENTARIO_INICIAL: Record<IdCategoria, number> = {

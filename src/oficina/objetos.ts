@@ -491,33 +491,69 @@ export function crearCaja(conCruz = true): CajaArmada {
 }
 
 
-/** Centro de la plataforma de carga, medido desde el origen del camión. */
-export const PLATAFORMA = new Vector3(-0.085, 0.092, 0);
+/** Largo del camión (m, antes de su escala en la oficina). */
+const LARGO_CAMION = 0.52;
+/**
+ * Dónde se deja la caja del pedido: detrás del camión (la cabina mira
+ * a +x), a la altura del piso del furgón, sobre la rampa trasera.
+ */
+export const PLATAFORMA = new Vector3(-LARGO_CAMION / 2 - 0.075, 0.074, 0);
 
+/** El camión de la Cruz Roja (camion.glb), con la cabina hacia +x. */
 export function crearCamion(): Group {
   const g = new Group();
-  g.add(bloque(0.52, 0.03, 0.2, MP.carbon, 0, 0.06, 0));
-  // Cabina (adelante es +x).
-  g.add(bloque(0.15, 0.15, 0.22, MP.rojo, 0.185, 0.15, 0));
-  g.add(bloque(0.004, 0.06, 0.18, MP.petroleo, 0.262, 0.175, 0));
-  g.add(bloque(0.07, 0.055, 0.224, MP.petroleo, 0.2, 0.18, 0));
-  g.add(bloque(0.02, 0.02, 0.2, MP.marfil, 0.262, 0.09, 0));
-  // Plataforma con barandas bajas.
-  g.add(bloque(0.36, 0.018, 0.24, MP.marfil, -0.085, 0.083, 0));
-  g.add(bloque(0.36, 0.035, 0.008, MP.rojoProfundo, -0.085, 0.108, 0.116));
-  g.add(bloque(0.36, 0.035, 0.008, MP.rojoProfundo, -0.085, 0.108, -0.116));
-  g.add(bloque(0.008, 0.035, 0.24, MP.rojoProfundo, -0.261, 0.108, 0));
-  // Ruedas.
-  const rueda = new CylinderGeometry(0.042, 0.042, 0.035, 20);
-  rueda.rotateX(Math.PI / 2);
-  for (const x of [0.17, -0.17]) {
-    for (const z of [0.105, -0.105]) {
-      const r = new Mesh(rueda, MP.carbon);
-      r.position.set(x, 0.042, z);
-      g.add(r);
-    }
+  const gltf = AssetManager.getGLTF('camion');
+  if (gltf) {
+    const modelo = gltf.scene.clone(true);
+    // En el archivo la cabina mira a +Z: se gira para que mire a +x.
+    modelo.rotation.y = Math.PI / 2;
+    const girado = new Group();
+    girado.add(modelo);
+    g.add(encajar(girado, LARGO_CAMION, 1, 1));
+  } else {
+    g.add(bloque(LARGO_CAMION, 0.2, 0.19, MP.rojo, 0, 0.1, 0));
   }
-  g.add(sombra(0.7, 0.36, 0.4));
+  // Rampa trasera donde se apoya la caja del pedido.
+  g.add(bloque(0.16, 0.008, 0.17, MP.carbon, PLATAFORMA.x, PLATAFORMA.y - 0.004, 0));
+  g.add(sombra(0.72, 0.3, 0.4));
+  return g;
+}
+
+/** Pantalla del monitor de escritorio.glb (coordenadas del nodo "Monitor"). */
+const PANTALLA = { x: -0.017, y: 0.323, z: 0.065, ancho: 0.81, alto: 0.458 };
+
+/**
+ * El monitor del computador (solo el monitor de escritorio.glb: sin mesa,
+ * teclado ni mouse), ajustado para que su pantalla mida ancho × alto y
+ * quede centrada en el origen (la interfaz del panel se dibuja encima).
+ */
+export function crearMonitor(ancho: number, alto: number): Group {
+  const g = new Group();
+  const gltf = AssetManager.getGLTF('monitor');
+  if (!gltf) {
+    return g;
+  }
+  const escena = gltf.scene.clone(true);
+  const nodo = escena.getObjectByName('Monitor') ?? escena;
+  nodo.position.set(0, 0, 0);
+  nodo.quaternion.identity();
+  const sx = ancho / PANTALLA.ancho;
+  const sy = alto / PANTALLA.alto;
+  escena.scale.set(sx, sy, sx);
+  escena.position.set(-PANTALLA.x * sx, -PANTALLA.y * sy, -PANTALLA.z * sx - 0.004);
+  // La pantalla con el fondo crema de los paneles.
+  const fondo = new MeshBasicMaterial({ color: COLOR.crema, toneMapped: false });
+  escena.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh) {
+      return;
+    }
+    const mat = m.material as Material;
+    if (mat && !Array.isArray(mat) && mat.name.startsWith('monitor_screen')) {
+      m.material = fondo;
+    }
+  });
+  g.add(escena);
   return g;
 }
 

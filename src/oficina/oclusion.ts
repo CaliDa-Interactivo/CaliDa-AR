@@ -9,13 +9,12 @@
 //    cuando se marca la entidad; como en la oficina aparecen objetos
 //    todo el tiempo (cajas, donaciones), aquí se parchan también los
 //    materiales nuevos.
-//  · Siempre (haya o no profundidad): la malla de la mano de IWSDK,
-//    que sigue cada articulación, se vuelve un "oclusor" invisible
-//    (no pinta color, sí escribe profundidad y se dibuja primero).
-//    IWSDK ya la agranda 5 %; aquí se infla 2 mm más por sus normales
-//    para cubrir el borde real de los dedos. Da un contorno nítido que sigue la mano sin retraso; la
-//    profundidad completa lo que la malla no cubre (mangas, objetos).
-//  · La mano dibujada (con su contorno) nunca se ve.
+//  · La mano real la recorta la profundidad del visor (a ras de la
+//    mano de verdad). La malla de la mano de IWSDK no se dibuja ni
+//    tapa nada: es genérica, no coincide con la mano real y dejaba una
+//    silueta gris corrida sobre los objetos.
+//  · Los objetos no cambian de color cerca de la mano: solo se recortan
+//    donde la mano real está delante.
 //  · Lo que se lleva en la mano nunca se tapa (ver interaccion.ts).
 // ============================================================
 import {
@@ -28,25 +27,8 @@ import {
   type World,
 } from '@iwsdk/core';
 
-/** Cuánto se infla la malla de la mano (m) para cubrir el borde real. */
-const INFLAR = 0.002;
-
-/** No pinta color pero sí profundidad: tapa lo que está detrás. */
-const OCLUSOR = new MeshBasicMaterial({ colorWrite: false });
-OCLUSOR.onBeforeCompile = (shader) => {
-  shader.vertexShader = shader.vertexShader.replace(
-    '#include <skinning_vertex>',
-    [
-      '#include <skinning_vertex>',
-      '#ifdef USE_SKINNING',
-      `  transformed += normalize( objectNormal ) * ${INFLAR.toFixed(4)};`,
-      '#else',
-      `  transformed += normalize( normal ) * ${INFLAR.toFixed(4)};`,
-      '#endif',
-    ].join('\n'),
-  );
-};
-OCLUSOR.customProgramCacheKey = () => 'calida-oclusor-mano';
+/** La malla de la mano de IWSDK: no se dibuja (ni color ni profundidad). */
+const INVISIBLE = new MeshBasicMaterial({ visible: false });
 
 type Uniformes = Record<string, { value: unknown }>;
 
@@ -67,15 +49,15 @@ export class Oclusion {
 
   actualizar(dt: number, manos: (Object3D | undefined)[]): void {
     const profundidad = this.conProfundidad;
-    // Mano de IWSDK: siempre oclusor invisible, dibujado antes que todo.
+    // Mano de IWSDK: invisible (la mano real la recorta la profundidad).
     for (const modelo of manos) {
+      if (modelo && modelo.visible) {
+        modelo.visible = false;
+      }
       modelo?.traverse((o) => {
         const m = o as Mesh;
-        if (m.isMesh && m.material !== OCLUSOR) {
-          m.material = OCLUSOR;
-          m.renderOrder = -10;
-          // La malla con huesos puede quedar fuera de su caja original.
-          m.frustumCulled = false;
+        if (m.isMesh && m.material !== INVISIBLE) {
+          m.material = INVISIBLE;
         }
       });
     }

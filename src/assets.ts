@@ -30,5 +30,6 @@ export default defineAssets({
   ra_material_construccion: glb('ra/material_construccion', 'material_construccion (RA)'),
   ra_proteccion_personal: glb('ra/proteccion_personal', 'proteccion_personal (RA)'),
   gato: glb('gato', 'Gato guía'),
-  estanteria: glb('estanteria', 'Estantería'),
+  camion: glb('ra/camion', 'Camión de la Cruz Roja'),
+  monitor: glb('ra/monitor', 'Monitor del computador (panel de avisos)'),
 });

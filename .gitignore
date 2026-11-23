@@ -47,3 +47,7 @@ pids/
 # Modelos de Blender y ajustes locales de Claude
 *.blend
 .claude/
+
+# Modelos fuente sin simplificar (en public/models/ra/ van las versiones para el Quest)
+/camion.glb
+/escritorio.glb

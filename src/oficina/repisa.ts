@@ -1,18 +1,20 @@
 // ============================================================
-// repisa.ts — la estantería del centro de acopio, la MISMA de la
-// página de CaliDa: el mueble estanteria.glb, su madera (#B87048)
-// y las placas de madera clavadas al frente de cada compartimiento
-// (fondo crema, borde de madera, dos clavitos, texto azul #011E41
-// en Roboto y el contador en azul petróleo #426D8C).
+// repisa.ts — la estantería del centro de acopio, como una GÓNDOLA
+// de supermercado (imagen de referencia): postes y bandejas de metal
+// claro, fondo de rejilla y cinco bandejas, una por categoría (de
+// arriba a abajo: Alimento, Aseo, Ropa, Medicamentos, Construcción).
 //
-// Seis categorías: arriba Alimentos y Agua; al medio Ropa y
-// Cobijas; abajo Higiene y Pañales (el compartimiento ancho de
-// abajo de la página se divide en dos con una tabla).
-// Cada una con 30 puestos (2 líneas × 15). Los objetos de la
-// repisa se dibujan en bloque (InstancedMesh).
+// En cada bandeja los productos van de frente, en fila y pegados uno
+// al lado del otro, agrupados por producto (como en el súper); se
+// llena primero la fila de adelante y después hacia atrás (3 filas).
+// Cada producto tiene su etiqueta en el riel del borde de la bandeja
+// (como las etiquetas de precio) y la placa de la categoría (nombre,
+// n/30 y punto de estado, con el diseño de la página) va en la
+// columna de letreros de la izquierda, a la altura de su bandeja.
+// Los objetos se ven al doble (o más) del tamaño anterior y se
+// dibujan en bloque (InstancedMesh, una por parte de cada producto).
 // ============================================================
 import {
-  AssetManager,
   BoxGeometry,
   CanvasTexture,
   Group,
@@ -22,37 +24,60 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  RepeatWrapping,
   SRGBColorSpace,
   Vector3,
 } from '@iwsdk/core';
 import { ALERTA, CATEGORIAS, TOPE, type IdCategoria } from './datos.js';
 import { partesDe, tamDe } from './objetos.js';
 
-/** Medidas del mueble en sus propias unidades (js/estanteria3d.js de la página). */
-const MUEBLE = { ancho: 6.15, alto: 5.412, fondo: -0.567, frente: 0.8 };
-const COMPARTIMIENTOS: Record<IdCategoria, { x0: number; x1: number; y0: number; y1: number; frente?: number }> = {
-  alimento: { x0: -2.743, x1: -0.123, y0: 3.797, y1: 5.079 },
-  aseo: { x0: 0.123, x1: 2.743, y0: 3.797, y1: 5.079 },
-  ropa: { x0: -2.743, x1: -0.123, y0: 2.198, y1: 3.582 },
-  medicamentos: { x0: 0.123, x1: 2.743, y0: 2.198, y1: 3.582 },
-  construccion: { x0: -2.743, x1: 2.743, y0: 0.332, y1: 1.983, frente: 0.86 },
+/** Medidas de la góndola en metros (sin el achicado de la ergonomía). */
+const G = {
+  /** Ancho útil de las bandejas (donde van los productos). */
+  ancho: 0.86,
+  /** Fondo de cada bandeja. */
+  fondo: 0.26,
+  /** Distancia entre bandejas. */
+  paso: 0.118,
+  /** Altura de la primera bandeja sobre la mesa. */
+  base: 0.035,
+  /** Columna de letreros (placas de las categorías), a la izquierda. */
+  columna: 0.17,
+  poste: 0.022,
+  /** Alto del riel de etiquetas al borde de cada bandeja. */
+  riel: 0.03,
+  grosor: 0.012,
 };
-/** Ancho real de la estantería sobre la mesa (m). */
-export const ANCHO_REPISA = 0.84;
-const S = ANCHO_REPISA / MUEBLE.ancho;
-export const ALTO_REPISA = MUEBLE.alto * S;
-const POR_LINEA = 15;
-/** Altura de la tabla de la fila de arriba sobre la base (m, sin achicar). */
-const ALTURA_FILA_ARRIBA = 3.797 * (ANCHO_REPISA / 6.15);
-/** Escala de los objetos dentro de la repisa. */
-export const ESCALA_REPISA = 0.5;
+/** Filas hacia atrás en cada bandeja. */
+const FILAS = 3;
+/** Orden de las bandejas, de arriba a abajo. */
+const ORDEN: IdCategoria[] = ['alimento', 'aseo', 'ropa', 'medicamentos', 'construccion'];
+const NIVELES = ORDEN.length;
 
-/** Madera de la página (ajustes de oct 2026, 16): un solo tono, mate. */
-const madera = new MeshStandardMaterial({ color: '#B87048', emissive: '#4E2A14', roughness: 0.95, metalness: 0 });
+/** Ancho total de la góndola (postes + columna de letreros + bandejas). */
+export const ANCHO_REPISA = 3 * G.poste + G.columna + G.ancho;
+const X_IZQ = -ANCHO_REPISA / 2;
+/** Borde izquierdo y derecho de la zona de productos. */
+const X_A = X_IZQ + 2 * G.poste + G.columna;
+const X_B = X_A + G.ancho;
+export const ALTO_REPISA = G.base + NIVELES * G.paso + G.grosor;
+/** Altura de la bandeja de arriba sobre la mesa (para la ergonomía). */
+const ALTURA_FILA_ARRIBA = G.base + (NIVELES - 1) * G.paso;
+/** Profundidad de cada fila y frente de la bandeja. */
+const FONDO_FILA = (G.fondo - 0.02) / FILAS;
+const Z_FRENTE = G.fondo / 2;
+/** Alto máximo de un producto en su bandeja. */
+const ALTO_PRODUCTO = G.paso - G.grosor - 0.022;
 
-const frenteDe = (c: { frente?: number }) => c.frente ?? MUEBLE.frente;
-/** Centro de la tabla de abajo de cada compartimiento (donde se clava la placa). */
-const yTabla = (c: { y0: number; frente?: number }) => (c.frente ? c.y0 / 2 : c.y0 - 0.108);
+/** Nivel (0 = abajo) de la bandeja de una categoría. */
+const nivelDe = (id: IdCategoria) => NIVELES - 1 - ORDEN.indexOf(id);
+/** Altura de la superficie de una bandeja. */
+const ySuperficie = (nivel: number) => G.base + nivel * G.paso;
+
+/** Metal claro de la góndola y bandejas, mates. */
+const metal = new MeshStandardMaterial({ color: '#EEE9E1', roughness: 0.55, metalness: 0.15 });
+const metalOscuro = new MeshStandardMaterial({ color: '#D9D2C6', roughness: 0.6, metalness: 0.15 });
+const riel = new MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.7, metalness: 0 });
 
 /** Colores del punto de estado de la placa (los de la página). */
 export const COLOR_ESTADO = { urgente: '#CC0100', desabastecido: '#F2C14E', medio: '#86B5A9', abastecido: '#B8AD9C' };
@@ -128,6 +153,56 @@ export function dibujarPlaca(
   }
 }
 
+/** Placa de categoría en dos líneas (nombre arriba; punto de estado y n/30 abajo), para leerla de lejos. */
+export function dibujarPlacaDoble(
+  ctx: CanvasRenderingContext2D,
+  ancho: number,
+  alto: number,
+  texto: string,
+  extra: string,
+  colorExtra: string,
+  estado: string | null,
+): void {
+  ctx.clearRect(0, 0, ancho, alto);
+  const radio = Math.min(alto, ancho) * 0.22;
+  ctx.fillStyle = '#B9814F';
+  redondeado(ctx, 0, 0, ancho, alto, radio);
+  ctx.fill();
+  const g = ctx.createLinearGradient(0, 0, 0, alto);
+  g.addColorStop(0, '#FFFBF3');
+  g.addColorStop(1, '#F6E7CF');
+  ctx.fillStyle = g;
+  const borde = Math.min(alto, ancho) * 0.06;
+  redondeado(ctx, borde, borde, ancho - borde * 2, alto - borde * 2, radio * 0.8);
+  ctx.fill();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Nombre: la mayor letra que quepa.
+  let tam = alto * 0.36;
+  ctx.font = `900 ${tam}px ${FAMILIA}`;
+  while (tam > alto * 0.15 && ctx.measureText(texto).width > ancho * 0.86) {
+    tam -= alto * 0.01;
+    ctx.font = `900 ${tam}px ${FAMILIA}`;
+  }
+  ctx.fillStyle = '#011E41';
+  ctx.fillText(texto, ancho / 2, alto * 0.33);
+  // Contador (con el punto de estado a la izquierda).
+  const tamN = alto * 0.34;
+  ctx.font = `900 ${tamN}px ${FAMILIA}`;
+  const anchoN = ctx.measureText(extra).width;
+  const punto = estado ? tamN * 0.9 : 0;
+  const x0 = (ancho - anchoN - punto) / 2;
+  if (estado) {
+    ctx.fillStyle = estado;
+    ctx.beginPath();
+    ctx.arc(x0 + tamN * 0.3, alto * 0.7, tamN * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = colorExtra;
+  ctx.fillText(extra, x0 + punto, alto * 0.7);
+}
+
 /** Etiqueta de producto (como las de la página): mismo diseño, en una o dos líneas. */
 export function dibujarEtiqueta(ctx: CanvasRenderingContext2D, ancho: number, alto: number, texto: string, tam: number): void {
   ctx.clearRect(0, 0, ancho, alto);
@@ -194,6 +269,8 @@ class Placa {
   constructor(
     readonly ancho: number,
     readonly alto: number,
+    /** Placa de categoría en dos líneas. */
+    private doble = false,
   ) {
     const lienzo = document.createElement('canvas');
     lienzo.width = 1024;
@@ -217,7 +294,7 @@ class Placa {
     }
     this.clave = clave;
     const c = this.ctx.canvas;
-    dibujarPlaca(this.ctx, c.width, c.height, texto, extra, colorExtra, estado);
+    (this.doble ? dibujarPlacaDoble : dibujarPlaca)(this.ctx, c.width, c.height, texto, extra, colorExtra, estado);
     this.textura.needsUpdate = true;
   }
 
@@ -229,38 +306,48 @@ class Placa {
   }
 }
 
-// ---- Estantería ------------------------------------------------------
-//
-// Cada compartimiento tiene una columna por producto (como la página),
-// con su etiqueta clavada al frente de la tabla de abajo y la placa de
-// la categoría (con su contador n/30) colgada al frente, arriba. Los objetos
-// se acomodan como cajas en bodega: primero se llena la fila de adelante
-// y después las de atrás (con 30 se ven filas hacia el fondo).
+// ---- Góndola ----------------------------------------------------------
 
-/** Medidas del acomodo de un compartimiento (unidades del mueble). */
+/** Acomodo de los productos de una categoría en su bandeja. */
 interface Acomodo {
-  /** Puestos a lo ancho de cada columna y filas hacia atrás. */
-  ancho: number;
-  filas: number;
-  colAncho: number;
-  filaFondo: number;
-  zFrente: number;
+  /** Columnas (a lo ancho) de cada producto; las filas hacia atrás son FILAS. */
+  cols: number;
+  /** Ancho del grupo de cada producto y de cada columna. */
+  anchoProducto: number;
+  anchoCol: number;
+  nivel: number;
   /** Escala de cada producto para caber en su puesto. */
   escalas: number[];
 }
 
-/** Alto de las etiquetas y placas (unidades del mueble); algo más que en la página para leerlas en RA. */
-const ALTO_ETIQUETA = 0.3;
+/** Rejilla del fondo (como la de la góndola de la referencia). */
+function texturaRejilla(): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+  ctx.fillStyle = '#F3EFE8';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.strokeStyle = '#CFC7BA';
+  ctx.lineWidth = 5;
+  ctx.strokeRect(0, 0, 64, 64);
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.anisotropy = 8;
+  return t;
+}
 
 export class Repisa {
-  /** Altura de la fila de arriba (para la ergonomía). */
+  /** Altura de la bandeja de arriba (para la ergonomía). */
   readonly alturaFilaArriba = ALTURA_FILA_ARRIBA;
+  /** Frente de la góndola (para poner el reloj y el gato). */
+  readonly frente = Z_FRENTE;
   readonly grupo = new Group();
   readonly cantidades: number[] = CATEGORIAS.map(() => 0);
   readonly danados: number[] = CATEGORIAS.map(() => 0);
   /** Cuántos hay de cada producto (por categoría). */
   readonly porProducto: number[][] = CATEGORIAS.map((c) => c.subs.map(() => 0));
-  /** Volumen invisible de cada compartimiento (para tocarlo y resaltarlo). */
+  /** Volumen invisible de cada bandeja (para tocarla y resaltarla). */
   readonly zonas: Mesh[] = [];
   private acomodos: Acomodo[] = [];
   private bloques: InstancedMesh[][][] = [];
@@ -270,52 +357,52 @@ export class Repisa {
   private preferidos: number[][] = CATEGORIAS.map(() => []);
 
   constructor() {
-    this.armarMueble();
-    // Todas las etiquetas de producto con la misma letra (como la página).
+    this.armarGondola();
+    // Todas las etiquetas de producto con la misma letra.
+    const anchoEtiqueta = (n: number) => (G.ancho / n) * 0.92;
+    const altoEtiqueta = G.riel * 0.92;
+    const pxAlto = (ancho: number) => Math.round((1024 * altoEtiqueta) / ancho);
     let letra = Infinity;
-    const pxAlto = (anchoU: number) => Math.round((1024 * ALTO_ETIQUETA) / anchoU);
     CATEGORIAS.forEach((cat) => {
-      const c = COMPARTIMIENTOS[cat.id];
-      const anchoU = ((c.x1 - c.x0) / cat.subs.length) * 0.92;
+      const a = anchoEtiqueta(cat.subs.length);
       for (const p of cat.subs) {
-        letra = Math.min(letra, (letraMaxima(p.nombre, 1024, pxAlto(anchoU)) / pxAlto(anchoU)) * ALTO_ETIQUETA);
+        letra = Math.min(letra, (letraMaxima(p.nombre, 1024, pxAlto(a)) / pxAlto(a)) * altoEtiqueta);
       }
     });
 
     CATEGORIAS.forEach((cat, i) => {
-      const c = COMPARTIMIENTOS[cat.id];
       const n = cat.subs.length;
-      const filas = cat.id === 'construccion' ? 2 : 4;
-      const ancho = Math.ceil(TOPE / (n * filas));
-      const colAncho = (c.x1 - c.x0) / n;
-      const zFrente = frenteDe(c) - 0.1;
-      const filaFondo = (zFrente - (MUEBLE.fondo + 0.06)) / filas;
-      const altoU = c.y1 - c.y0;
+      const nivel = nivelDe(cat.id);
+      const porProducto = Math.ceil(TOPE / n);
+      const cols = Math.ceil(porProducto / FILAS);
+      const anchoProducto = G.ancho / n;
+      const anchoCol = anchoProducto / cols;
       const escalas = cat.subs.map((_, s) => {
         const t = tamDe(cat.id, s);
         return Math.min(
-          1.2,
-          ((colAncho / ancho) * 0.88 * S) / Math.max(t.x, 0.001),
-          (filaFondo * 0.85 * S) / Math.max(t.z, 0.001),
-          (altoU * 0.55 * S) / Math.max(t.y, 0.001),
+          1.6,
+          (anchoCol * 0.9) / Math.max(t.x, 0.001),
+          (FONDO_FILA * 0.9) / Math.max(t.z, 0.001),
+          ALTO_PRODUCTO / Math.max(t.y, 0.001),
         );
       });
-      const acomodo: Acomodo = { ancho, filas, colAncho, filaFondo, zFrente, escalas };
-      this.acomodos.push(acomodo);
+      this.acomodos.push({ cols, anchoProducto, anchoCol, nivel, escalas });
+      const y0 = ySuperficie(nivel);
 
-      // Zona del compartimiento (invisible; se ilumina al soltar algo).
+      // Zona de la bandeja (invisible; se ilumina al soltar algo).
+      const alto = G.paso - G.grosor;
       const zona = new Mesh(
-        new BoxGeometry((c.x1 - c.x0) * S, altoU * S, (frenteDe(c) - MUEBLE.fondo) * S),
+        new BoxGeometry(G.ancho, alto, G.fondo),
         new MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0, depthWrite: false }),
       );
-      zona.position.set(((c.x0 + c.x1) / 2) * S, ((c.y0 + c.y1) / 2) * S, ((frenteDe(c) + MUEBLE.fondo) / 2) * S);
+      zona.position.set((X_A + X_B) / 2, y0 + alto / 2, 0);
       zona.userData.sinContorno = true;
       zona.userData.categoria = i;
       this.grupo.add(zona);
       this.zonas.push(zona);
 
-      // Objetos de cada producto, en bloque (uno por puesto de su columna).
-      const cap = ancho * filas;
+      // Objetos de cada producto, en bloque (uno por puesto).
+      const cap = cols * FILAS;
       const matriz = new Matrix4();
       const v = new Vector3();
       const porSub: InstancedMesh[][] = [];
@@ -337,51 +424,68 @@ export class Repisa {
         }
         porSub.push(bloquesSub);
 
-        // Etiqueta del producto clavada al frente de la tabla de abajo, bajo su columna.
-        const etiqueta = new Placa(colAncho * 0.92 * S, ALTO_ETIQUETA * S);
-        etiqueta.etiqueta(p.nombre, (letra / ALTO_ETIQUETA) * etiqueta.ctx.canvas.height);
-        etiqueta.malla.position.set((c.x0 + colAncho * (s + 0.5)) * S, yTabla(c) * S, (frenteDe(c) + 0.035) * S);
+        // Etiqueta del producto en el riel, bajo su grupo (como las de precio).
+        const etiqueta = new Placa(anchoEtiqueta(n), altoEtiqueta);
+        etiqueta.etiqueta(p.nombre, (letra / altoEtiqueta) * etiqueta.ctx.canvas.height);
+        etiqueta.malla.position.set(X_A + anchoProducto * (s + 0.5), y0 - G.riel / 2, Z_FRENTE + 0.006);
         this.grupo.add(etiqueta.malla);
       });
       this.bloques.push(porSub);
 
-      // Placa de la categoría (con su contador) colgada al frente, arriba del
-      // compartimiento (los productos no llegan tan alto, así siempre se lee).
-      const placa = new Placa(Math.min(1.7, (c.x1 - c.x0) * 0.66) * S, ALTO_ETIQUETA * S);
-      placa.malla.position.set(((c.x0 + c.x1) / 2) * S, (c.y1 - ALTO_ETIQUETA * 0.6) * S, (frenteDe(c) + 0.05) * S);
+      // Placa de la categoría en la columna de letreros, a la altura de su bandeja.
+      const placa = new Placa(G.columna * 0.94, 0.084, true);
+      placa.malla.position.set(X_IZQ + G.poste + G.columna / 2, y0 + G.paso * 0.4, Z_FRENTE + 0.006);
       this.grupo.add(placa.malla);
       this.placas.push(placa);
     });
     this.pintar();
   }
 
-  private armarMueble(): void {
-    const gltf = AssetManager.getGLTF('estanteria');
-    if (gltf) {
-      const mueble = gltf.scene;
-      mueble.scale.setScalar(S);
-      mueble.traverse((o) => {
-        const m = o as Mesh;
-        if (m.isMesh) {
-          m.material = madera;
-        }
-      });
-      this.grupo.add(mueble);
+  /** Postes, bandejas, rieles, fondo de rejilla y columna de letreros. */
+  private armarGondola(): void {
+    const caja = (w: number, h: number, d: number, m: MeshStandardMaterial, x: number, y: number, z: number) => {
+      const malla = new Mesh(new BoxGeometry(w, h, d), m);
+      malla.position.set(x, y, z);
+      this.grupo.add(malla);
+    };
+    const alto = ALTO_REPISA;
+    // Postes (adelante y atrás) a la izquierda, entre letreros y bandejas, y a la derecha.
+    for (const x of [X_IZQ + G.poste / 2, X_A - G.poste / 2, X_B + G.poste / 2]) {
+      for (const z of [Z_FRENTE - G.poste / 2, -Z_FRENTE + G.poste / 2]) {
+        caja(G.poste, alto, G.poste, metalOscuro, x, alto / 2, z);
+      }
     }
+    // Bandejas (con su riel de etiquetas al frente) y la tapa de arriba.
+    for (let n = 0; n < NIVELES; n++) {
+      const y = ySuperficie(n);
+      caja(G.ancho, G.grosor, G.fondo, metal, (X_A + X_B) / 2, y - G.grosor / 2, 0);
+      caja(G.ancho, G.riel, 0.008, riel, (X_A + X_B) / 2, y - G.riel / 2, Z_FRENTE);
+    }
+    caja(ANCHO_REPISA, G.grosor, G.fondo, metal, 0, alto - G.grosor / 2, 0);
+    // Columna de letreros (tablero claro de frente).
+    caja(G.columna, alto - G.grosor, 0.01, riel, X_IZQ + G.poste + G.columna / 2, (alto - G.grosor) / 2, Z_FRENTE - 0.012);
+    // Fondo de rejilla.
+    const rejilla = texturaRejilla();
+    rejilla.repeat.set(ANCHO_REPISA / 0.035, alto / 0.035);
+    const fondo = new Mesh(
+      new PlaneGeometry(ANCHO_REPISA, alto),
+      new MeshStandardMaterial({ map: rejilla, roughness: 0.7, metalness: 0.1 }),
+    );
+    fondo.position.set(0, alto / 2, -Z_FRENTE + 0.004);
+    this.grupo.add(fondo);
   }
 
-  /** Punto (coordenadas de la estantería) del puesto j de la columna del producto s. */
+  /** Punto (coordenadas de la estantería) del puesto j del producto s: primero adelante, luego atrás. */
   private puestoEn(i: number, s: number, j: number, salida: Vector3): Vector3 {
-    const c = COMPARTIMIENTOS[CATEGORIAS[i].id];
     const a = this.acomodos[i];
-    const fila = Math.floor(j / a.ancho);
-    const k = j % a.ancho;
-    const x = c.x0 + a.colAncho * s + (a.colAncho / a.ancho) * (k + 0.5);
-    return salida.set(x * S, c.y0 * S, (a.zFrente - a.filaFondo * (fila + 0.5)) * S);
+    const fila = Math.floor(j / a.cols);
+    const k = j % a.cols;
+    const x = X_A + a.anchoProducto * s + a.anchoCol * (k + 0.5);
+    return salida.set(x, ySuperficie(a.nivel), Z_FRENTE - 0.012 - FONDO_FILA * (fila + 0.5));
   }
 
   private capacidad(i: number): number {
-    return this.acomodos[i].ancho * this.acomodos[i].filas;
+    return this.acomodos[i].cols * FILAS;
   }
 
   /** Producto con más espacio libre en su columna. */
@@ -424,10 +528,9 @@ export class Repisa {
     return this.acomodos[i].escalas[this.columnaPara(i, sub)] ?? 1;
   }
 
-  /** Producto (columna) más cercano a un punto de la estantería; -1 si fuera de la categoría. */
+  /** Producto más cercano a un punto de la estantería. */
   productoEn(i: number, p: Vector3): number {
-    const c = COMPARTIMIENTOS[CATEGORIAS[i].id];
-    const s = Math.floor((p.x / S - c.x0) / this.acomodos[i].colAncho);
+    const s = Math.floor((p.x - X_A) / this.acomodos[i].anchoProducto);
     return Math.max(0, Math.min(CATEGORIAS[i].subs.length - 1, s));
   }
 
@@ -538,25 +641,19 @@ export class Repisa {
     });
   }
 
-  /** ¿En qué compartimiento queda ese punto (coordenadas de la repisa)? -1 si en ninguno. */
+  /** ¿En qué bandeja queda ese punto (coordenadas de la repisa)? -1 si en ninguna. */
   categoriaEn(p: Vector3): number {
-    for (let i = 0; i < CATEGORIAS.length; i++) {
-      const c = COMPARTIMIENTOS[CATEGORIAS[i].id];
-      if (
-        p.x > c.x0 * S - 0.01 &&
-        p.x < c.x1 * S + 0.01 &&
-        p.y > c.y0 * S - 0.03 &&
-        p.y < c.y1 * S + 0.02 &&
-        p.z < frenteDe(c) * S + 0.22 &&
-        p.z > MUEBLE.fondo * S - 0.05
-      ) {
-        return i;
-      }
+    if (p.x < X_A - 0.02 || p.x > X_B + 0.02 || p.z > Z_FRENTE + 0.2 || p.z < -Z_FRENTE - 0.05) {
+      return -1;
     }
-    return -1;
+    const nivel = Math.floor((p.y - G.base + 0.025) / G.paso);
+    if (nivel < 0 || nivel >= NIVELES) {
+      return -1;
+    }
+    return CATEGORIAS.findIndex((c) => c.id === ORDEN[NIVELES - 1 - nivel]);
   }
 
-  /** Marca solo ese compartimiento (blanco, verde o rojo; null lo apaga). */
+  /** Marca solo esa bandeja (blanco, verde o rojo; null lo apaga). */
   marcar(i: number, color: string | null): void {
     const m = this.zonas[i]?.material as MeshBasicMaterial | undefined;
     if (!m) {

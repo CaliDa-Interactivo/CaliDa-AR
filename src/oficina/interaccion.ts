@@ -1,20 +1,20 @@
 // ============================================================
 // interaccion.ts — agarrar, llevar, soltar y empujar botones.
 //
-//  · Agarrar: la palma de canto (vertical) a menos de ~6 cm de un
-//    "agarrable" lo resalta; al cerrar el puño se agarra. Lo que se
-//    lleva va en el centro de la palma, un poco afuera de los nudillos,
-//    conserva el giro con que se tomó y sigue la muñeca suavizado
+//  · Agarrar con PINZA (pulgar e índice), sin rayos: el punto de la
+//    pinza a menos de ~5 cm de un "agarrable" lo resalta (hover: contorno
+//    blanco) y al cerrar la pinza se agarra. Lo que se lleva va en la
+//    pinza, conserva el giro con que se tomó y sigue la mano suavizado
 //    (~50 ms); lo grande se achica un poco y siempre se ve encima de
-//    la mano. Al abrirla se suelta y el agarrable decide: snap animado
-//    a un puesto válido, o cae hasta la mesa o el piso.
+//    la mano. Al abrir la pinza se suelta y el agarrable decide: snap
+//    animado a un puesto válido, o cae hasta la mesa o el piso.
 //  · Sonidos: "pop" al agarrar; el juego suena el acierto o el error
 //    al soltar en un puesto; si solo cae, un golpe suave.
 //  · Contorno: blanco cuando la mano está cerca, verde mientras se
 //    lleva sobre un puesto válido, rojo sobre uno que no sirve.
 //  · Botones: se presionan empujando con la punta del índice.
 //  · Computador (?prueba): el mouse arrastra (mano cerrada) y hace
-//    clic en los botones. No hay pellizco ni rayos en ningún caso.
+//    clic en los botones. No hay rayos en ningún caso.
 // ============================================================
 import {
   Box3,
@@ -53,7 +53,7 @@ export interface Agarrable {
   contornoDe?: (llevado: Object3D) => ConContorno | null;
   /** Contorno en reposo (p. ej. rojo si está dañado). */
   reposo?: (obj: Object3D) => void;
-  /** Se agarra con la palma en cualquier posición (p. ej. metiendo la mano en una caja). */
+  /** (Sin uso con la pinza; se conserva por compatibilidad.) */
   palmaLibre?: boolean;
 }
 
@@ -82,9 +82,8 @@ interface Llevado {
   limpiador: Mesh;
 }
 
-const ALCANCE = 0.06;
-/** La palma cuenta como vertical si su normal no mira mucho arriba ni abajo. */
-const VERTICAL = 0.62;
+/** Distancia del punto de la pinza a un objeto para resaltarlo y agarrarlo. */
+const ALCANCE = 0.05;
 /** Suavizado del seguimiento de la muñeca (segundos). */
 const SUAVE = 0.05;
 /** Lo que mide más que esto se achica mientras se lleva. */
@@ -208,13 +207,13 @@ export class Interaccion {
         continue;
       }
       // Mano libre: ¿toca algo?
-      let cerca = mano === this.raton ? this.arrastre : this.masCercano(mano, true);
+      let cerca = mano === this.raton ? this.arrastre : this.masCercano(mano);
       if (cerca && mano !== this.raton) {
         this.ultimoHover.set(mano, { ag: cerca, t: this.tiempo });
       }
-      // Al cerrar el puño la palma se mueve un poco: vale el hover de hace un momento.
+      // Al cerrar la pinza los dedos se mueven un poco: vale el hover de hace un momento.
       const u = this.ultimoHover.get(mano);
-      if (!cerca && mano.recienCerrada && u && this.tiempo - u.t < 0.4 && this.masCercano(mano, false, ALCANCE * 1.6) === u.ag) {
+      if (!cerca && mano.recienCerrada && u && this.tiempo - u.t < 0.4 && this.masCercano(mano, ALCANCE * 1.6) === u.ag) {
         cerca = u.ag;
       }
       const antes = this.hover.get(mano);
@@ -233,19 +232,15 @@ export class Interaccion {
     this.botonesConIndice();
   }
 
-  private masCercano(mano: Mano, vertical: boolean, alcance = ALCANCE): Agarrable | null {
+  private masCercano(mano: Mano, alcance = ALCANCE): Agarrable | null {
     let mejor: Agarrable | null = null;
     let dist = alcance;
-    const deCanto = mano.tipo !== 'mano' || Math.abs(mano.normal.y) < VERTICAL;
     for (const ag of this.agarrables) {
       if (!ag.activo() || !this.visible(ag.obj) || this.ocupado(ag)) {
         continue;
       }
-      if (vertical && !deCanto && !ag.palmaLibre) {
-        continue;
-      }
       this.caja.setFromObject(ag.obj);
-      const d = this.caja.distanceToPoint(mano.palma);
+      const d = this.caja.distanceToPoint(mano.agarre);
       if (d < dist) {
         dist = d;
         mejor = ag;
@@ -276,7 +271,7 @@ export class Interaccion {
     this.anim.cancelar(obj);
     obj.updateWorldMatrix(true, true);
     obj.getWorldPosition(this.v);
-    const offset = this.v.clone().sub(mano.palma);
+    const offset = this.v.clone().sub(mano.agarre);
     // Lo que sale nuevo (de una caja o de la repisa) va justo en la mano.
     if (obj !== ag.obj || offset.length() > 0.12) {
       offset.set(0, -0.03, 0);
@@ -317,7 +312,7 @@ export class Interaccion {
       return;
     }
     if (mano === this.raton) {
-      this.w.copy(mano.palma).add(l.offset);
+      this.w.copy(mano.agarre).add(l.offset);
       obj.position.copy(padre.worldToLocal(this.w));
       return;
     }
@@ -494,6 +489,7 @@ export class Interaccion {
     this.arrastre = ag;
     this.raton.presente = true;
     this.raton.palma.copy(punto);
+    this.raton.agarre.copy(punto);
     this.raton.indice.copy(punto);
     this.raton.fijarCerrada(false);
     this.raton.fijarCerrada(true);
@@ -507,6 +503,7 @@ export class Interaccion {
     const p = this.rayo.ray.intersectPlane(this.plano, this.w);
     if (p) {
       this.raton.palma.copy(p);
+      this.raton.agarre.copy(p);
       this.raton.indice.copy(p);
     }
   }

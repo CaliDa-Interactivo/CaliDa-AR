@@ -45,7 +45,7 @@ Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Salt
   etiquetas en el riel y las placas de las categorías a la izquierda; el gato encima con el reloj, la
   caneca de descarte justo a la izquierda de la góndola, la pila de cajas (máx. 8), la zona de
   trabajo y la caja del pedido; a la derecha el camión de la Cruz Roja y el botón **Despachar**.
-- **Oclusión:** la profundidad del Quest 3 recorta lo virtual a ras de la mano real (modo MinMax);
+- **Oclusión:** la profundidad del Quest 3 recorta lo virtual a ras de la mano real (oclusión suave, difuminado corto);
   la malla genérica de la mano no se dibuja, así los objetos no cambian de color ni de forma.
 - **Flujo:** campana → aviso → llegan cajas → quitar la tapa → revisar cada objeto a mano (contorno
   rojo y letrero = dañado) → a su compartimiento o a la caneca. Llegan pedidos de municipios del Valle

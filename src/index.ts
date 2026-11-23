@@ -51,10 +51,7 @@ const fuentes = Promise.race([
 const mundo = fuentes.then(() => World.create($<HTMLDivElement>('scene-container'), projectOptions));
 mundo.catch((e: unknown) => mostrarError(`no se pudo cargar (${(e as Error)?.message ?? e}). Recarga la página.`));
 mundo.then(async (world) => {
-  // Nitidez en el Quest 3 (antes de abrir la sesión): un poco más de
-  // resolución que la predeterminada y foveación suave, para que los textos
-  // de los paneles laterales y las etiquetas de la estantería se lean bien.
-  world.renderer.xr.setFramebufferScaleFactor(1.2);
+  // Foveación suave: los bordes de la vista (paneles laterales) se ven más nítidos.
   world.renderer.xr.setFoveation(0.4);
   if (enPrueba) {
     // Para revisar el estado desde la consola del navegador.
@@ -70,7 +67,7 @@ mundo.then(async (world) => {
     // Oclusión con la profundidad real (Quest 3): manos y objetos reales tapan
     // lo virtual con un borde suave. Si el visor no la da, no hace nada.
     world.registerSystem(DepthSensingSystem, {
-      configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 12 },
+      configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 8 },
     });
     world.registerSystem(sistema === 'multi' ? MultiSystem : OficinaSystem);
   };

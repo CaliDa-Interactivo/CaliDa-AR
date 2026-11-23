@@ -3,9 +3,9 @@
 //
 //  · Con WebXR Depth Sensing (Quest 3): el DepthSensingSystem de
 //    IWSDK compara la profundidad real con la de cada píxel virtual
-//    en modo MinMax (separa lo cercano de lo lejano en cada zona y
-//    funde solo en el borde: el contorno de la mano queda definido,
-//    sin halo borroso). IWSDK solo parcha los materiales que existen
+//    (oclusión suave con un difuminado corto, para que el borde quede
+//    pegado a la mano). OJO: el modo MinMax de IWSDK deja la escena
+//    invisible en el Quest; no usarlo. IWSDK solo parcha los materiales que existen
 //    cuando se marca la entidad; como en la oficina aparecen objetos
 //    todo el tiempo (cajas, donaciones), aquí se parchan también los
 //    materiales nuevos.

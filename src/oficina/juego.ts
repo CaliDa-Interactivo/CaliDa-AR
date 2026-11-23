@@ -150,8 +150,9 @@ export class OficinaSystem extends createSystem({}) {
     const mundo = this.world;
     this.raizEnt = mundo.createTransformEntity(this.escena.raiz);
     try {
-      // MinMax: oclusión suave que respeta los bordes (contorno de la mano definido).
-      this.raizEnt.addComponent(DepthOccludable, { mode: OcclusionShadersMode.MinMaxSoftOcclusion });
+      // Oclusión suave (la que funciona en el Quest 3). El modo MinMax dejaba la
+      // escena invisible dentro de la sesión: no usarlo.
+      this.raizEnt.addComponent(DepthOccludable, { mode: OcclusionShadersMode.SoftOcclusion });
     } catch {
       // Sin el sistema de profundidad registrado: queda la mano como oclusor.
     }

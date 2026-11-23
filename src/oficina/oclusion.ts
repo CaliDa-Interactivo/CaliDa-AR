@@ -1,14 +1,15 @@
 // ============================================================
 // oclusion.ts — que las manos reales tapen lo virtual.
 //
-//  · Con WebXR Depth Sensing (Quest 3): el DepthSensingSystem de
-//    IWSDK compara la profundidad real con la de cada píxel virtual
-//    (oclusión suave con un difuminado corto, para que el borde quede
-//    pegado a la mano). OJO: el modo MinMax de IWSDK deja la escena
-//    invisible en el Quest; no usarlo. IWSDK solo parcha los materiales que existen
-//    cuando se marca la entidad; como en la oficina aparecen objetos
-//    todo el tiempo (cajas, donaciones), aquí se parchan también los
-//    materiales nuevos.
+//  · Por defecto (Quest 3): three.js escribe la profundidad real del visor
+//    en el búfer de profundidad antes de dibujar, así lo real (las manos)
+//    tapa lo virtual a ras, con borde nítido. No hace falta nada aquí.
+//  · Con ?oclusionsuave: el DepthSensingSystem de IWSDK compara la
+//    profundidad real con la de cada píxel virtual (borde suave). IWSDK
+//    solo parcha los materiales que existen cuando se marca la entidad;
+//    como en la oficina aparecen objetos todo el tiempo (cajas,
+//    donaciones), aquí se parchan también los nuevos, y se corrige el
+//    factor de metros que dejaba la escena invisible en el Quest.
 //  · La mano real la recorta la profundidad del visor (a ras de la
 //    mano de verdad). La malla de la mano de IWSDK no se dibuja ni
 //    tapa nada: es genérica, no coincide con la mano real y dejaba una
@@ -61,15 +62,18 @@ export class Oclusion {
         }
       });
     }
+    const sistema = this.world.getSystem(DepthSensingSystem) as unknown as
+      | { entityShaderMap?: Map<Entity, Set<Uniformes>> }
+      | undefined;
+    const uniformes = sistema?.entityShaderMap?.get(this.raizEnt);
+    if (uniformes && !this.corrector) {
+      this.instalarCorrector(uniformes);
+    }
     this.t += dt;
     if (!profundidad || this.t < 0.5) {
       return;
     }
     this.t = 0;
-    const sistema = this.world.getSystem(DepthSensingSystem) as unknown as
-      | { entityShaderMap?: Map<Entity, Set<Uniformes>> }
-      | undefined;
-    const uniformes = sistema?.entityShaderMap?.get(this.raizEnt);
     if (!uniformes) {
       return;
     }
@@ -85,6 +89,35 @@ export class Oclusion {
         }
       }
     });
+  }
+
+  private corrector = false;
+
+  /**
+   * Corrección para el Quest 3. Con la profundidad de la GPU, IWSDK pasa a
+   * metros con `rawValueToMeters × depthNear / (1 − valor)`: esa fórmula ya
+   * da metros, así que el factor debe ser 1. El Quest reporta otro factor
+   * (el de milímetros), con lo que todo lo real parecía estar pegado a los
+   * ojos y la escena virtual entera quedaba "tapada" (no se veía nada).
+   * Justo antes de dibujar (después de que IWSDK pone sus valores) se deja
+   * el factor en 1.
+   */
+  private instalarCorrector(uniformes: Set<Uniformes>): void {
+    this.corrector = true;
+    const escena = this.world.scene;
+    const previo = escena.onBeforeRender.bind(escena);
+    escena.onBeforeRender = (...args) => {
+      previo(...args);
+      if (this.world.xrSession?.depthUsage !== 'gpu-optimized') {
+        return;
+      }
+      for (const u of uniformes) {
+        const factor = u.uRawValueToMeters;
+        if (factor && factor.value !== 1) {
+          factor.value = 1;
+        }
+      }
+    };
   }
 
   private parchar(mat: Material, uniformes: Set<Uniformes>): void {

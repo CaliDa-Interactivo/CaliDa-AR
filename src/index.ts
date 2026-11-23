@@ -64,10 +64,12 @@ mundo.then(async (world) => {
       return;
     }
     registrado = true;
-    // Oclusión con la profundidad real (Quest 3): manos y objetos reales tapan
-    // lo virtual con un borde suave. Si el visor no la da, no hace nada.
-    // ?sinoclusion la apaga (interruptor de emergencia para probar en las gafas).
-    if (!parametros.has('sinoclusion')) {
+    // Oclusión con la profundidad real (Quest 3). Por defecto la hace three.js:
+    // cuando el visor da la profundidad (gpu-optimized), three escribe la
+    // profundidad real en el búfer y lo real (las manos) tapa lo virtual a ras,
+    // sin convertir unidades. La oclusión suave de IWSDK dejaba la escena
+    // invisible en el Quest; se puede probar con ?oclusionsuave.
+    if (parametros.has('oclusionsuave')) {
       world.registerSystem(DepthSensingSystem, {
         configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: true, blurRadius: 8 },
       });

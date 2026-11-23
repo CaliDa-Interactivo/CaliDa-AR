@@ -45,7 +45,7 @@ Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Salt
   etiquetas en el riel y las placas de las categorías a la izquierda; el gato encima con el reloj, la
   caneca de descarte justo a la izquierda de la góndola, la pila de cajas (máx. 8), la zona de
   trabajo y la caja del pedido; a la derecha el camión de la Cruz Roja y el botón **Despachar**.
-- **Oclusión:** la profundidad del Quest 3 recorta lo virtual a ras de la mano real (oclusión suave, difuminado corto);
+- **Oclusión:** la profundidad del Quest 3 recorta lo virtual a ras de la mano real (three.js escribe la profundidad real);
   la malla genérica de la mano no se dibuja, así los objetos no cambian de color ni de forma.
 - **Flujo:** campana → aviso → llegan cajas → quitar la tapa → revisar cada objeto a mano (contorno
   rojo y letrero = dañado) → a su compartimiento o a la caneca. Llegan pedidos de municipios del Valle
@@ -100,8 +100,8 @@ npm run build            # compila a dist/
 npm run prueba:compartido  # pruebas de las reglas del multijugador (node)
 ```
 
-Si en las gafas no se ve nada virtual, abre el enlace con `?sinoclusion` al final
-(https://calida-interactivo.github.io/CaliDa-AR/?sinoclusion): apaga la oclusión por profundidad.
+La oclusión (que las manos reales tapen lo virtual) la hace three.js con la profundidad del Quest 3.
+Para probar la oclusión suave de IWSDK: https://calida-interactivo.github.io/CaliDa-AR/?oclusionsuave
 
 Modo prueba con el mouse: `?prueba` (un jugador), `?prueba&multi=crear&rol=despachador` y
 `?prueba&multi=unir&sala=CÓDIGO`. Para el multijugador usa **dos ventanas lado a lado** (no pestañas:

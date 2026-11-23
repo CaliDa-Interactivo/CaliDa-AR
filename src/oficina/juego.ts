@@ -24,6 +24,7 @@ import {
   type Entity,
   type Object3D,
   DepthOccludable,
+  OcclusionShadersMode,
 } from '@iwsdk/core';
 import { Animador } from '../guion/animador.js';
 import { Gato } from '../guion/gato.js';
@@ -149,7 +150,8 @@ export class OficinaSystem extends createSystem({}) {
     const mundo = this.world;
     this.raizEnt = mundo.createTransformEntity(this.escena.raiz);
     try {
-      this.raizEnt.addComponent(DepthOccludable);
+      // MinMax: oclusión suave que respeta los bordes (contorno de la mano definido).
+      this.raizEnt.addComponent(DepthOccludable, { mode: OcclusionShadersMode.MinMaxSoftOcclusion });
     } catch {
       // Sin el sistema de profundidad registrado: queda la mano como oclusor.
     }

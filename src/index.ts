@@ -32,7 +32,19 @@ if (enPrueba) {
   (window as unknown as Record<string, unknown>).red = red;
 }
 
-World.create($<HTMLDivElement>('scene-container'), projectOptions).then(async (world) => {
+// Los letreros 3D se dibujan en lienzos: Roboto debe estar cargada antes de
+// crear el mundo (si no, quedarían con otra letra). Máximo 4 s de espera.
+const fuentes = Promise.race([
+  Promise.all(['300', '400', '700', '900'].map((peso) => document.fonts.load(`${peso} 40px Roboto`))),
+  new Promise((listo) => setTimeout(listo, 4000)),
+]).catch(() => undefined);
+
+fuentes.then(() => World.create($<HTMLDivElement>('scene-container'), projectOptions)).then(async (world) => {
+  // Nitidez en el Quest 3 (antes de abrir la sesión): un poco más de
+  // resolución que la predeterminada y foveación suave, para que los textos
+  // de los paneles laterales y las etiquetas de la estantería se lean bien.
+  world.renderer.xr.setFramebufferScaleFactor(1.2);
+  world.renderer.xr.setFoveation(0.4);
   if (enPrueba) {
     // Para revisar el estado desde la consola del navegador.
     (window as unknown as Record<string, unknown>).mundo = world;
@@ -47,7 +59,7 @@ World.create($<HTMLDivElement>('scene-container'), projectOptions).then(async (w
     // Oclusión con la profundidad real (Quest 3): manos y objetos reales tapan
     // lo virtual con un borde suave. Si el visor no la da, no hace nada.
     world.registerSystem(DepthSensingSystem, {
-      configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 20 },
+      configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: false, blurRadius: 12 },
     });
     world.registerSystem(sistema === 'multi' ? MultiSystem : OficinaSystem);
   };

@@ -201,8 +201,12 @@ class Placa {
     this.ctx = lienzo.getContext('2d') as CanvasRenderingContext2D;
     this.textura = new CanvasTexture(lienzo);
     this.textura.colorSpace = SRGBColorSpace;
-    this.textura.anisotropy = 4;
-    this.malla = new Mesh(new PlaneGeometry(ancho, alto), new MeshBasicMaterial({ map: this.textura, transparent: true }));
+    this.textura.anisotropy = 8;
+    // Sin tone mapping: los colores y el contraste del texto quedan como en la página.
+    this.malla = new Mesh(
+      new PlaneGeometry(ancho, alto),
+      new MeshBasicMaterial({ map: this.textura, transparent: true, toneMapped: false }),
+    );
     this.malla.userData.sinContorno = true;
   }
 

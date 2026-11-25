@@ -49,12 +49,16 @@ const MESAS: [number, number, number, number][] = [
   [0.55, 0.9, -0.75, -0.05], // derecha
 ];
 
-export const PILA = [new Vector3(-0.38, 0, -0.34), new Vector3(-0.2, 0, -0.34)];
+export const PILA = [new Vector3(-0.34, 0, -0.34), new Vector3(-0.17, 0, -0.34)];
 /** La caja que se está desocupando: al centro, frente a la persona y cerca del borde de la mesa. */
 export const TRABAJO = new Vector3(0, 0, -0.33);
 export const PEDIDO = new Vector3(0.4, 0, -0.41);
-/** Caneca de descarte: junto a la esquina delantera izquierda (abajo) de la estantería. */
-export const CANECA = new Vector3(-0.45, 0, -0.47);
+/**
+ * Caneca de descarte: en la esquina delantera izquierda, por FUERA de la
+ * estantería (su frente está en z ≈ −0,50 y su lado en x ≈ −0,43) y sin
+ * tocar la pila de cajas: así no atraviesa el mueble.
+ */
+export const CANECA = new Vector3(-0.485, 0, -0.42);
 /** Monitor del computador: parado sobre la mesa de la izquierda. */
 const MONITOR = new Vector3(-0.72, 0, -0.4);
 export const ESCALA_CAJA = 0.7;

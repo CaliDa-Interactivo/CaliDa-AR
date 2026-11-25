@@ -24,7 +24,7 @@
 //  El anfitrión (quien creó la sala) tiene el estado que manda y lo
 //  envía 4 veces por segundo.
 // ============================================================
-import { Vector3, type Object3D } from '@iwsdk/core';
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial, Vector3, type Object3D } from '@iwsdk/core';
 import { sonidos } from '../guion/sonidos.js';
 import {
   CATEGORIAS,
@@ -37,7 +37,7 @@ import {
   type Evento,
   type IdCategoria,
 } from './datos.js';
-import { ANGULO, ESCALA_GATO, mirarAlCentro } from './escena.js';
+import { ESCALA_GATO, mirarAlCentro } from './escena.js';
 import type { Agarrable } from './interaccion.js';
 import { OficinaSystem, cuentaNueva, type Cuenta } from './juego.js';
 import { Chat, PUNTO_ESTADO, NOMBRES, PanelEstado, type EstadoCat, type MensajeChat } from './multi-ui.js';
@@ -73,6 +73,8 @@ export class MultiSystem extends OficinaSystem {
   // Piezas de los roles
   private chat!: Chat;
   private panelEstado: PanelEstado | null = null;
+  /** Lo que solo usa el despachador (camión, caja de pedidos…): oculto para el receptor. */
+  private soloDespacho: Object3D[] = [];
   /** Último mensaje del chat ya visto (para marcar la pestaña). */
   private chatLeido = 0;
   // Donantes (receptor): tarjetas en la pestaña "Donantes".
@@ -118,14 +120,31 @@ export class MultiSystem extends OficinaSystem {
 
     if (this.rol === 'receptor') {
       e.panel.alRechazo = (aviso) => this.rechazarDonante(aviso);
-      // Derecha: panel de estado del centro (sin camión ni despacho).
-      for (const o of [e.camion, e.botonDespacho.grupo, e.letreroDespacho.malla, e.pedestal, this.cajaPedido.raiz, e.letreroPedido.malla]) {
-        o.visible = false;
-      }
+      // Sin camión, caja de pedidos ni despacho: el receptor no despacha (se
+      // ocultan en cada cuadro, porque el juego de un jugador los vuelve a mostrar).
+      this.soloDespacho = [e.camion, e.botonDespacho.grupo, e.letreroDespacho.malla, e.pedestal, this.cajaPedido.raiz, e.letreroPedido.malla];
       e.botonDespacho.activo = false;
-      this.panelEstado = new PanelEstado(0.44);
-      e.sobre.add(this.panelEstado.grupo);
-      e.ubicar(this.panelEstado.grupo, ANGULO.derecha);
+      // Panel de estado del centro: como un atril inclinado sobre la mesa de
+      // la izquierda, delante del monitor, mirando a la persona.
+      // El monitor se corre un poco hacia atrás para dejarle sitio.
+      e.panel.grupo.position.x = -0.74;
+      e.panel.grupo.position.z = -0.5;
+      mirarAlCentro(e.panel.grupo);
+      const ancho = 0.32;
+      this.panelEstado = new PanelEstado(ancho);
+      const atril = new Group();
+      atril.position.set(-0.72, 0, -0.19);
+      mirarAlCentro(atril);
+      const inclinacion = 0.95; // rad: la cara mira hacia arriba, a los ojos
+      const alto = ancho * 0.84;
+      this.panelEstado.grupo.rotation.x = -inclinacion;
+      this.panelEstado.grupo.position.y = (alto / 2) * Math.cos(inclinacion) + 0.012;
+      atril.add(this.panelEstado.grupo);
+      // Respaldo de madera detrás del panel.
+      const respaldo = new Mesh(new BoxGeometry(ancho + 0.01, alto + 0.01, 0.012), new MeshStandardMaterial({ color: '#B97A4A', roughness: 0.85 }));
+      respaldo.position.z = -0.008;
+      this.panelEstado.grupo.add(respaldo);
+      e.sobre.add(atril);
       this.panelEstado.alCambiar = (i, valor) => this.op({ tipo: 'estado', i, valor });
       this.inter.botones.push(...this.panelEstado.botones.flat());
     } else {
@@ -524,6 +543,9 @@ export class MultiSystem extends OficinaSystem {
     const dt = Math.min(delta, 0.05);
     this.sincronizar(dt);
     super.cuadro(delta);
+    for (const o of this.soloDespacho) {
+      o.visible = false;
+    }
     // El anfitrión envía el estado 4 veces por segundo.
     if (this.red.anfitrion) {
       this.tEnvio -= dt;

@@ -133,7 +133,7 @@ export class MultiSystem extends OficinaSystem {
       const ancho = 0.32;
       this.panelEstado = new PanelEstado(ancho);
       const atril = new Group();
-      atril.position.set(-0.72, 0, -0.19);
+      atril.position.set(-0.73, 0, -0.23);
       mirarAlCentro(atril);
       const inclinacion = 0.95; // rad: la cara mira hacia arriba, a los ojos
       const alto = ancho * 0.84;

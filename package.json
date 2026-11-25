@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "prueba:compartido": "esbuild pruebas/compartido.prueba.ts --bundle --platform=node --format=esm --log-level=warning --outfile=pruebas/.salida/compartido.mjs && node pruebas/.salida/compartido.mjs",
     "prueba:oclusion": "esbuild pruebas/oclusion.prueba.ts --bundle --platform=node --format=esm --log-level=warning --outfile=pruebas/.salida/oclusion.mjs && node pruebas/.salida/oclusion.mjs",
-    "pruebas": "npm run prueba:compartido && npm run prueba:oclusion"
+    "pruebas": "npm run prueba:compartido && npm run prueba:oclusion && npm run prueba:superficie",
+    "prueba:superficie": "esbuild pruebas/superficie.prueba.ts --bundle --platform=node --format=esm --log-level=warning --outfile=pruebas/.salida/superficie.mjs && node pruebas/.salida/superficie.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.1.0-rc.2",

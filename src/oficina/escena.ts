@@ -35,7 +35,7 @@ import {
 import { ENTRADA, PLATAFORMA, crearCamion, crearMonitor, sombra } from './objetos.js';
 import { COLOR } from './datos.js';
 import { ALTO_PANEL, ANCHO_PANEL, Panel } from './panel.js';
-import { ALTO_REPISA, Repisa } from './repisa.js';
+import { ALTO_REPISA, ANCHO_REPISA, Repisa } from './repisa.js';
 import { BOTON, Boton3D, Lienzo } from './ui.js';
 
 const mate = (color: string) => new MeshStandardMaterial({ color, roughness: 0.88 });
@@ -60,6 +60,11 @@ const CAMION = new Vector3(0.66, 0, -0.5);
 const BOTON_DESPACHO = new Vector3(0.64, 0, -0.1);
 /** Estantería: lo más cerca posible sin tapar la zona de trabajo. */
 const Z_REPISA = -0.62;
+/**
+ * Huella de la estantería sobre la mesa (coordenadas de la oficina, sin
+ * achicar): es lo que debe quedar sobre una superficie real al colocarla.
+ */
+export const HUELLA_REPISA = { centroZ: Z_REPISA + 0.016, ancho: ANCHO_REPISA + 0.02, fondo: 0.2 };
 /** Ángulos (grados, positivo a la izquierda) de los paneles alrededor de la persona. */
 export const ANGULO = { panel: 68, derecha: -58, mensajes: 104, resumen: 0 };
 const DISTANCIA_PANEL = 0.7;
@@ -242,13 +247,16 @@ export class Escena {
 
   /**
    * Ajusta todo a la estatura (calibración de pie): `ojos` es la altura de
-   * los ojos sobre el piso. Devuelve la altura de la mesa.
+   * los ojos sobre el piso; `mesaReal`, la altura de la superficie real donde
+   * va la estantería (null: la mesa flota a la altura del codo). Devuelve la
+   * altura de la mesa.
    */
-  ajustarErgonomia(ojos: number): number {
+  ajustarErgonomia(ojos: number, mesaReal: number | null = null): number {
     this.ojos = Math.min(2.05, Math.max(1.0, ojos));
     const estatura = this.ojos / 0.93;
-    // Mesa: a la altura del codo menos 7,5 cm.
-    this.alto = Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
+    // Mesa: sobre la superficie real si la hay; si no, a la altura del codo menos 7,5 cm.
+    this.alto =
+      mesaReal !== null ? Math.min(1.3, Math.max(0.35, mesaReal)) : Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
     this.sobre.position.y = this.alto;
     // Estantería: la fila de arriba queda bajo la línea de los ojos. Se achica
     // solo un poco si hace falta, para que los productos se vean grandes.

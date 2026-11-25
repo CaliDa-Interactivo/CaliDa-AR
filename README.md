@@ -15,7 +15,9 @@ repositorio ni en su enlace.
 1. En el Meta Quest 3, abre el navegador y entra a https://calida-interactivo.github.io/CaliDa-AR/
 2. Elige **Un jugador** o **Multijugador** y toca **Entrar en RA** (acepta los permisos de manos y
    espacio). Si ves la versión vieja, recarga la página.
-3. El gato y el botón **Colocar aquí** siguen tu mirada. Párate derecho, mira al frente y empuja el
+3. Si las gafas reconocen una mesa (Configuración del espacio), aparece un rectángulo blanco
+   encima: ahí irá la estantería, sobre la mesa real y a su altura. Si no, la mesa virtual flota.
+4. El gato y el botón **Colocar aquí** siguen tu mirada. Párate derecho, mira al frente y empuja el
    botón con la punta del índice: la oficina se calibra a tu estatura y queda anclada a ese lugar.
 
 Para que encuentre el piso, las gafas deben tener hecha la configuración del espacio
@@ -128,6 +130,7 @@ npx -y @gltf-transform/cli@4.1.1 simplify --ratio 0.1 --error 0.01 entrada.glb s
 | `src/index.ts` | Crea el mundo, registra `DepthSensingSystem` y el sistema del modo |
 | `src/assets.ts` | Manifiesto de GLB |
 | `src/webxr.ts` | `comprobarWebXR`, `AnclaWebXR`, `SondaPiso` |
+| `src/superficie.ts` | `buscarSuperficie`: dónde poner la estantería sobre una mesa real (planos de WebXR) |
 | `src/guion/` | Gato (modelo, globo y animaciones), animador, sonidos, tildes para UIKit |
 | `src/oficina/datos.ts` | Categorías, productos, jornadas, municipios |
 | `src/oficina/modelo.ts` | Aviso, Pedido, Cuenta, estrellas |

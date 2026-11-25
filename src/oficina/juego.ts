@@ -16,8 +16,12 @@
 // sin pellizco ni rayos (los punteros de IWSDK se apagan).
 // ============================================================
 import {
+  BoxGeometry,
   createSystem,
   Group,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
   Quaternion,
   Vector3,
   VisibilityState,
@@ -30,7 +34,7 @@ import { Animador } from '../guion/animador.js';
 import { Gato } from '../guion/gato.js';
 import { sonidos } from '../guion/sonidos.js';
 import { crearCaja, crearTarima, type CajaArmada } from './objetos.js';
-import { AnclaWebXR, SondaPiso } from '../webxr.js';
+import { AnclaWebXR, SondaPiso, buscarSuperficie, type Superficie } from '../webxr.js';
 import {
   CATEGORIAS,
   COLOR,
@@ -54,6 +58,7 @@ import {
   ESCALA_CAJA,
   ESCALA_GATO,
   Escena,
+  HUELLA_REPISA,
   PEDIDO,
   PILA,
   TRABAJO,
@@ -88,6 +93,31 @@ export interface ObjetoJuego {
   ag: Agarrable;
 }
 
+/** Rectángulo blanco (borde y relleno suave) con la huella de la estantería. */
+function crearVistaPrevia(): Group {
+  const g = new Group();
+  const { ancho, fondo } = HUELLA_REPISA;
+  const relleno = new Mesh(
+    new PlaneGeometry(ancho, fondo),
+    new MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.18, depthWrite: false, toneMapped: false }),
+  );
+  relleno.rotation.x = -Math.PI / 2;
+  g.add(relleno);
+  const borde = new MeshBasicMaterial({ color: '#FFFFFF', toneMapped: false });
+  const b = 0.008;
+  for (const [w, d, x, z] of [
+    [ancho, b, 0, -fondo / 2],
+    [ancho, b, 0, fondo / 2],
+    [b, fondo, -ancho / 2, 0],
+    [b, fondo, ancho / 2, 0],
+  ]) {
+    const lado = new Mesh(new BoxGeometry(w, 0.003, d), borde);
+    lado.position.set(x, 0.0015, z);
+    g.add(lado);
+  }
+  return g;
+}
+
 /** Escala de la caja del pedido adentro del furgón (para que quepa por la puerta). */
 const ESCALA_CAJA_CAMION = 0.6;
 
@@ -104,6 +134,13 @@ export class OficinaSystem extends createSystem({}) {
   protected gato!: Gato;
   protected ancla = new AnclaWebXR();
   protected sonda = new SondaPiso();
+  /** Superficie real (mesa) donde irá la estantería; null si no se reconoce ninguna. */
+  protected superficie: Superficie | null = null;
+  protected tSuperficie = 0;
+  /** Altura de la mesa real sobre el piso al colocar (null: la mesa flota). */
+  protected mesaReal: number | null = null;
+  /** Rectángulo blanco sobre la mesa real: ahí irá la estantería. */
+  protected vistaPrevia = crearVistaPrevia();
   /** El despachador no tiene caneca: no clasifica, solo despacha. */
   protected conCaneca = true;
   protected oclusion!: Oclusion;
@@ -182,6 +219,8 @@ export class OficinaSystem extends createSystem({}) {
     if (!params.has('sinoclusormano')) {
       this.player.add(this.oclusorManos.grupo);
     }
+    this.vistaPrevia.visible = false;
+    this.player.add(this.vistaPrevia);
     // ?diagnostico: datos de la profundidad y de las manos frente a la vista.
     if (params.has('diagnostico')) {
       this.diagnostico = new Diagnostico(mundo, this.manos);
@@ -337,9 +376,43 @@ export class OficinaSystem extends createSystem({}) {
       }
     }
     this.alturaInicio();
-    if (this.sonda.fuente && !this.vistas.has('piso')) {
+    if (this.sonda.fuente && !this.vistas.has('piso') && !this.superficie) {
       this.vistas.add('piso');
       this.gato.decir('Ya encontré el piso. Mira hacia donde quieras la oficina y empuja "Colocar aquí".');
+    }
+  }
+
+  /**
+   * Mientras se escoge el lugar: busca una superficie real (mesa) donde quepa
+   * toda la estantería, cerca de donde se está mirando, y la marca con un
+   * rectángulo blanco.
+   */
+  protected buscarMesaReal(dt: number, cuadro: XRFrame | null, espacio: XRReferenceSpace | null): void {
+    this.tSuperficie -= dt;
+    if (this.tSuperficie > 0) {
+      return;
+    }
+    this.tSuperficie = 0.3;
+    if (!cuadro || !espacio) {
+      this.superficie = null;
+      this.vistaPrevia.visible = false;
+      return;
+    }
+    const giro = Math.atan2(-this.frente.x, -this.frente.z);
+    const z = HUELLA_REPISA.centroZ;
+    const deseado = { x: this.cabeza.x + z * Math.sin(giro), z: this.cabeza.z + z * Math.cos(giro), giro };
+    const antes = this.superficie;
+    this.superficie = buscarSuperficie(cuadro, espacio, this.pisoY(), deseado, HUELLA_REPISA.ancho, HUELLA_REPISA.fondo);
+    const sup = this.superficie;
+    this.vistaPrevia.visible = !!sup;
+    if (sup) {
+      this.vistaPrevia.position.set(sup.x, sup.y + 0.004, sup.z);
+      this.vistaPrevia.rotation.set(0, sup.giro, 0);
+      if (!antes && !this.vistas.has('mesa')) {
+        this.vistas.add('mesa');
+        this.vistas.add('piso');
+        this.gato.decir('Encontré una mesa: la estantería irá en el rectángulo blanco. Empuja "Colocar aquí".');
+      }
     }
   }
 
@@ -347,10 +420,23 @@ export class OficinaSystem extends createSystem({}) {
   protected colocar(): void {
     this.leerCabeza();
     const raiz = this.escena.raiz;
-    raiz.position.set(this.cabeza.x, this.pisoY(), this.cabeza.z);
-    raiz.rotation.set(0, Math.atan2(-this.frente.x, -this.frente.z), 0);
+    const piso = this.pisoY();
+    const sup = this.superficie;
+    if (sup) {
+      // La estantería queda SOBRE la superficie real (mesa) y la mesa virtual a
+      // su altura; las esquinas de la mesa virtual pueden salirse.
+      const z = HUELLA_REPISA.centroZ;
+      raiz.position.set(sup.x - z * Math.sin(sup.giro), piso, sup.z - z * Math.cos(sup.giro));
+      raiz.rotation.set(0, sup.giro, 0);
+      this.mesaReal = sup.y - piso;
+    } else {
+      raiz.position.set(this.cabeza.x, piso, this.cabeza.z);
+      raiz.rotation.set(0, Math.atan2(-this.frente.x, -this.frente.z), 0);
+      this.mesaReal = null;
+    }
+    this.vistaPrevia.visible = false;
     // Calibración de pie: todo se ajusta a la estatura (ver escena.ts).
-    const alto = this.escena.ajustarErgonomia(this.cabeza.y - raiz.position.y);
+    const alto = this.escena.ajustarErgonomia(this.cabeza.y - raiz.position.y, this.mesaReal);
     raiz.updateWorldMatrix(true, true);
     // Ancla de WebXR: la oficina queda fija al cuarto real.
     const cuadro = this.world.xrFrame;
@@ -376,9 +462,14 @@ export class OficinaSystem extends createSystem({}) {
       cam.position.set(raiz.position.x, alto + 0.68, raiz.position.z + 0.62);
       cam.lookAt(raiz.position.x, alto - 0.05, raiz.position.z - 0.42);
     }
+    const lejos = Math.hypot(this.cabeza.x - raiz.position.x, this.cabeza.z - raiz.position.z) > 0.25;
     if (this.fase === 'colocar') {
       this.fase = 'jornada';
-      this.gato.decir('Listo, oficina en su nuevo lugar.');
+      this.gato.decir(
+        sup
+          ? `Listo: la estantería quedó sobre tu mesa.${lejos ? ' Párate frente a ella.' : ''}`
+          : 'Listo, oficina en su nuevo lugar.',
+      );
     } else {
       // Primera vez: el ejemplo de la pinza sobre la mesa, recién cargada.
       this.demoPinza.reiniciar();
@@ -404,7 +495,7 @@ export class OficinaSystem extends createSystem({}) {
   /** Vuelve a medir la altura de los ojos (de pie) y reacomoda todo sin mover la oficina. */
   protected recalibrar(): void {
     this.leerCabeza();
-    this.escena.ajustarErgonomia(this.cabeza.y - this.escena.raiz.position.y);
+    this.escena.ajustarErgonomia(this.cabeza.y - this.escena.raiz.position.y, this.mesaReal);
     this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.5, { arco: 0.08, escala: ESCALA_GATO });
     sonidos.pop();
     this.gato.decir('Listo: ajusté la mesa, la estantería y los paneles a tu estatura. Si no estabas de pie, párate derecho y vuelve a empujarlo.', 'Altura');
@@ -1541,6 +1632,7 @@ export class OficinaSystem extends createSystem({}) {
     }
     if ((this.fase === 'inicio' || this.fase === 'colocar') && this.inicio.visible) {
       this.sonda.actualizar(this.world.xrSession, cuadro, espacio, this.cabeza.y);
+      this.buscarMesaReal(dt, cuadro, espacio);
       this.seguirMirada(dt);
     }
 

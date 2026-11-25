@@ -183,3 +183,5 @@ export class SondaPiso {
       .catch(() => undefined);
   }
 }
+
+export { buscarSuperficie, type Superficie } from './superficie.js';

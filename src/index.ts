@@ -57,21 +57,24 @@ if (funciones && !pedirProfundidad(parametros)) {
   delete funciones.depthSensing;
 }
 
-const mundo = fuentes.then(() => World.create($<HTMLDivElement>('scene-container'), projectOptions));
-mundo.catch((e: unknown) => mostrarError(`no se pudo cargar (${(e as Error)?.message ?? e}). Recarga la página.`));
-mundo.then(async (world) => {
-  // Foveación suave: los bordes de la vista (paneles laterales) se ven más nítidos.
-  world.renderer.xr.setFoveation(0.4);
-  if (enPrueba) {
-    // Para revisar el estado desde la consola del navegador.
-    (window as unknown as Record<string, unknown>).mundo = world;
+// ---- Pantalla de entrada ----------------------------------------------
+// Los botones funcionan desde que abre la página: el multijugador (crear la
+// sala o unirse) NO espera a que cargue el 3D. "Entrar en RA" se habilita
+// sola cuando hay todo lo que necesita (la experiencia cargada, WebXR y, en
+// multijugador, la conexión con el otro jugador).
+
+let mundoListo: World | null = null;
+let puedeRA = false;
+let registrado = false;
+botonSolo.disabled = true;
+
+/** Registra el sistema del juego (una sola vez) y abre la sesión de RA. */
+const entrar = (sistema: 'solo' | 'multi') => {
+  const world = mundoListo;
+  if (!world) {
+    return;
   }
-  // El sistema del juego se registra al elegir el modo.
-  let registrado = false;
-  const registrar = (sistema: 'solo' | 'multi') => {
-    if (registrado) {
-      return;
-    }
+  if (!registrado) {
     registrado = true;
     // Oclusión por profundidad de IWSDK: SOLO con ?oclusionsuave (para probar).
     // Por defecto dejaba la escena invisible en el Quest 3; las manos tapan con
@@ -82,71 +85,94 @@ mundo.then(async (world) => {
       });
     }
     world.registerSystem(sistema === 'multi' ? MultiSystem : OficinaSystem);
-  };
-  let puedeRA = false;
+  }
+  if (!enPrueba) {
+    void world.launchXR();
+  }
+};
 
-  // ---- Multijugador: sala con código de 4 dígitos ----
-  (world.globals as Record<string, unknown>).red = red;
-  let rolElegido: Rol = 'receptor';
-  document.querySelectorAll<HTMLButtonElement>('.rol').forEach((b) => {
-    b.addEventListener('click', () => {
-      rolElegido = b.dataset.rol as Rol;
-      document.querySelectorAll('.rol').forEach((x) => x.classList.toggle('activo', x === b));
-    });
+/** Habilita los botones de entrar y dice qué falta. */
+const actualizarEntrada = () => {
+  botonSolo.disabled = !(mundoListo && puedeRA);
+  const conectado = red.conectado;
+  botonEntrarMulti.disabled = !(conectado && mundoListo && puedeRA);
+  if (conectado) {
+    const falta = !mundoListo ? ' Cargando la experiencia…' : !puedeRA ? ' (Este equipo no abre realidad aumentada.)' : ' Ya pueden entrar.';
+    estadoSala.textContent = `Conectados en la sala ${red.codigo}. Tu rol: ${nombreRol(red.rol)}.${falta}`;
+  }
+};
+
+// ---- Multijugador: sala con código de 4 dígitos ----
+let rolElegido: Rol = 'receptor';
+document.querySelectorAll<HTMLButtonElement>('.rol').forEach((b) => {
+  b.addEventListener('click', () => {
+    rolElegido = b.dataset.rol as Rol;
+    document.querySelectorAll('.rol').forEach((x) => x.classList.toggle('activo', x === b));
   });
-  const nombreRol = (r: Rol) => (r === 'receptor' ? 'Receptor' : 'Despachador');
-  red.alCambiar = (estado, detalle) => {
-    if (estado === 'conectado') {
-      estadoSala.textContent = `Conectados en la sala ${red.codigo}. Tu rol: ${nombreRol(red.rol)}. Ya pueden entrar.`;
-      botonEntrarMulti.disabled = !puedeRA;
-    } else if (estado === 'esperando') {
+});
+const nombreRol = (r: Rol) => (r === 'receptor' ? 'Receptor' : 'Despachador');
+red.alCambiar = (estado, detalle) => {
+  if (estado === 'conectado') {
+    actualizarEntrada();
+  } else {
+    botonEntrarMulti.disabled = true;
+    if (estado === 'esperando') {
       estadoSala.textContent =
         detalle ?? `Sala ${red.codigo}. Eres ${nombreRol(red.rol)}. Comparte el código y espera al otro jugador.`;
     } else if (estado === 'reconectando') {
       estadoSala.textContent = detalle ?? 'Reconectando…';
     }
-  };
-  botonMulti.addEventListener('click', () => {
-    pasoModo.hidden = true;
-    pasoMulti.hidden = false;
-  });
-  botonVolver.addEventListener('click', () => {
-    pasoModo.hidden = false;
-    pasoMulti.hidden = true;
-  });
-  botonCrear.addEventListener('click', async () => {
-    botonCrear.disabled = botonUnirse.disabled = true;
-    estadoSala.textContent = 'Creando la sala…';
-    try {
-      await red.crearSala(rolElegido);
-    } catch (e) {
-      estadoSala.textContent = (e as Error).message;
-      botonCrear.disabled = botonUnirse.disabled = false;
-    }
-  });
-  botonUnirse.addEventListener('click', async () => {
-    const codigo = campoCodigo.value.trim();
-    if (!/^\d{4}$/.test(codigo)) {
-      estadoSala.textContent = 'Escribe el código de 4 dígitos de la sala.';
-      return;
-    }
-    botonCrear.disabled = botonUnirse.disabled = true;
-    estadoSala.textContent = 'Conectando…';
-    try {
-      await red.unirse(codigo);
-    } catch (e) {
-      estadoSala.textContent = (e as Error).message;
-      botonCrear.disabled = botonUnirse.disabled = false;
-    }
-  });
-  botonEntrarMulti.addEventListener('click', () => {
-    registrar('multi');
-    world.launchXR();
-  });
-  botonSolo.addEventListener('click', () => {
-    registrar('solo');
-    world.launchXR();
-  });
+  }
+};
+botonMulti.addEventListener('click', () => {
+  pasoModo.hidden = true;
+  pasoMulti.hidden = false;
+});
+botonVolver.addEventListener('click', () => {
+  pasoModo.hidden = false;
+  pasoMulti.hidden = true;
+});
+botonCrear.addEventListener('click', async () => {
+  botonCrear.disabled = botonUnirse.disabled = true;
+  estadoSala.textContent = 'Creando la sala…';
+  try {
+    await red.crearSala(rolElegido);
+  } catch (e) {
+    estadoSala.textContent = (e as Error).message;
+    botonCrear.disabled = botonUnirse.disabled = false;
+  }
+});
+botonUnirse.addEventListener('click', async () => {
+  const codigo = campoCodigo.value.replace(/\D/g, '');
+  if (!/^\d{4}$/.test(codigo)) {
+    estadoSala.textContent = 'Escribe el código de 4 dígitos de la sala.';
+    return;
+  }
+  botonCrear.disabled = botonUnirse.disabled = true;
+  estadoSala.textContent = 'Conectando…';
+  try {
+    await red.unirse(codigo);
+    actualizarEntrada();
+  } catch (e) {
+    estadoSala.textContent = (e as Error).message;
+    red.cerrar();
+    botonCrear.disabled = botonUnirse.disabled = false;
+  }
+});
+botonEntrarMulti.addEventListener('click', () => entrar('multi'));
+botonSolo.addEventListener('click', () => entrar('solo'));
+
+const mundo = fuentes.then(() => World.create($<HTMLDivElement>('scene-container'), projectOptions));
+mundo.catch((e: unknown) => mostrarError(`no se pudo cargar (${(e as Error)?.message ?? e}). Recarga la página.`));
+mundo.then(async (world) => {
+  // Foveación suave: los bordes de la vista (paneles laterales) se ven más nítidos.
+  world.renderer.xr.setFoveation(0.4);
+  if (enPrueba) {
+    // Para revisar el estado desde la consola del navegador.
+    (window as unknown as Record<string, unknown>).mundo = world;
+  }
+  (world.globals as Record<string, unknown>).red = red;
+  mundoListo = world;
 
   // Pantalla de entrada (solo fuera de la sesión de realidad aumentada).
   world.visibilityState.subscribe((estado) => {
@@ -159,9 +185,9 @@ mundo.then(async (world) => {
     const multi = parametros.get('multi');
     if (multi) {
       await salaDePrueba;
-      registrar('multi');
+      entrar('multi');
     } else {
-      registrar('solo');
+      entrar('solo');
     }
   }
 
@@ -171,13 +197,13 @@ mundo.then(async (world) => {
   if (puedeRA) {
     estadoWebXR.textContent = 'WebXR listo: realidad aumentada disponible.';
   } else {
-    botonSolo.disabled = true;
     estadoWebXR.textContent = soporte.api
       ? 'WebXR: este equipo no ofrece realidad aumentada.'
       : 'Este navegador no tiene WebXR.';
     aviso.textContent =
       'Esta experiencia es solo para gafas Meta Quest: abre este enlace en el navegador de las gafas.';
   }
+  actualizarEntrada();
 });
 
 // Modo prueba: ?prueba&multi=crear&rol=despachador o ?prueba&multi=unir&sala=1234.

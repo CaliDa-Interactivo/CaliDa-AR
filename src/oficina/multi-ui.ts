@@ -163,7 +163,36 @@ export class Chat {
     private yo: Rol,
     ancho: number,
     icono: (cat: IdCategoria) => HTMLCanvasElement,
+    /** En la pantalla del computador: mensajes a la izquierda y botones en 2 columnas a la derecha. */
+    pantalla = false,
   ) {
+    if (pantalla) {
+      this.lienzo = new Lienzo(560, 680, ancho * 0.47);
+      this.lienzo.malla.position.set(-ancho * 0.25, 0, 0);
+      this.grupo.add(this.lienzo.malla);
+      const anchoB = ancho * 0.235;
+      const botones: [string, string, () => void, HTMLCanvasElement][] = [
+        ...CATEGORIAS.map((cat): [string, string, () => void, HTMLCanvasElement] => {
+          this.iconos[cat.id] = icono(cat.id);
+          return [cat.corto, BOTON.secundario, () => this.alEnviar(`Necesito ${cat.corto.toLowerCase()}`, { cat: cat.id }), this.iconos[cat.id]!];
+        }),
+        ...MENSAJES.map((m): [string, string, () => void, HTMLCanvasElement] => [
+          m.texto,
+          m.clave === 'urgente' ? BOTON.peligro : BOTON.principal,
+          () => this.alEnviar(m.texto, { clave: m.clave }),
+          iconoMensaje(m.clave),
+        ]),
+      ];
+      botones.forEach(([texto, color, accion, ic], i) => {
+        const b = new Boton3D(texto, anchoB, 0.036, color);
+        b.ponerIcono(ic);
+        b.grupo.position.set(ancho * (0.125 + (i % 2) * 0.25), 0.11 - Math.floor(i / 2) * 0.047, 0);
+        b.alPresionar = accion;
+        this.grupo.add(b.grupo);
+        this.botones.push(b);
+      });
+      return;
+    }
     this.lienzo = new Lienzo(900, 560, ancho);
     this.grupo.add(this.lienzo.malla);
     const alto = (ancho * 560) / 900;
@@ -199,7 +228,8 @@ export class Chat {
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = COLOR.azul;
     ctx.font = `900 40px ${FUENTE}`;
-    ctx.fillText(`Mensajes con el ${this.yo === 'receptor' ? 'despachador' : 'receptor'}`, 34, 58);
+    const otro = this.yo === 'receptor' ? 'despachador' : 'receptor';
+    ctx.fillText(l.ancho < 700 ? `Chat con el ${otro}` : `Mensajes con el ${otro}`, 34, 58, l.ancho - 110);
     ctx.fillStyle = conectado ? COLOR.verde : COLOR.rojo;
     ctx.beginPath();
     ctx.arc(l.ancho - 50, 44, 12, 0, Math.PI * 2);
@@ -207,7 +237,7 @@ export class Chat {
     // Los últimos 5, el más nuevo abajo.
     const ultimos = mensajes.slice(-5);
     const ALTO = 80;
-    let y = 540 - ultimos.length * (ALTO + 10);
+    let y = l.alto - 20 - ultimos.length * (ALTO + 10);
     for (const m of ultimos) {
       const mio = m.de === this.yo;
       const icono = m.cat ? (this.iconos[m.cat] ?? null) : m.clave ? iconoMensaje(m.clave) : null;
@@ -250,7 +280,7 @@ export class Chat {
       ctx.fillStyle = COLOR.gris;
       ctx.font = `400 30px ${FUENTE}`;
       ctx.textAlign = 'center';
-      ctx.fillText('Usa los botones de abajo para escribirle.', l.ancho / 2, 320);
+      ctx.fillText(l.ancho < 700 ? 'Usa los botones para escribirle.' : 'Usa los botones de abajo para escribirle.', l.ancho / 2, l.alto / 2);
     }
     l.listo();
   }

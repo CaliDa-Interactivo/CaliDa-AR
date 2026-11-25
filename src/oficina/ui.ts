@@ -174,7 +174,7 @@ export class Boton3D {
   readonly cuerpo: Mesh;
   private material: MeshStandardMaterial;
   private cara: Lienzo;
-  private texto = '';
+  texto = '';
   private icono: HTMLCanvasElement | null = null;
   private _activo = true;
   /** Si es false, el botón ni se ve ni se presiona. */

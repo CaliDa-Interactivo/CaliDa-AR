@@ -1,7 +1,18 @@
 // Tipos compartidos del juego: avisos y pedidos.
 import type { IdCategoria } from './datos.js';
 
-export type TipoAviso = 'cajas' | 'pedido' | 'alerta' | 'entrega';
+export type TipoAviso = 'cajas' | 'pedido' | 'alerta' | 'entrega' | 'donante';
+
+/** Un donante que espera en la pantalla del receptor (datos inventados). */
+export interface DatosDonante {
+  nombre: string;
+  cedula: string;
+  cat: IdCategoria;
+  cantidad: number;
+  /** Segundos de paciencia que le quedan y los que tenía. */
+  paciencia: number;
+  pacienciaMax: number;
+}
 
 export interface Pedido {
   id: number;
@@ -32,6 +43,9 @@ export interface Aviso {
   hechoEn: number;
   pedido?: Pedido;
   cajas?: number;
+  /** Segundo botón (p. ej. "Rechazar" en la tarjeta de un donante). */
+  rechazo?: string;
+  donante?: DatosDonante;
 }
 
 /** Lo que falta para completar un pedido, en texto. */

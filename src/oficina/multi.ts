@@ -3,17 +3,20 @@
 //
 // Extiende el juego de un jugador con dos roles:
 //
-//  RECEPTOR (storyboard 3): llega un donante con su tarjeta (nombre,
-//  cédula, donación). Se digita a mano en el computador y se
-//  registra: su caja aparece en la pila. Si la fila está llena, se
-//  rechaza. Si se acaba la paciencia del donante, se va y la
-//  donación se pierde. Abre cajas, clasifica y surte la repisa como
-//  en un jugador. A la derecha, el panel de estado de cada
-//  categoría (se necesita / no se necesita / urgente).
+//  Los dos usan la MISMA pantalla del computador de un jugador, con
+//  dos pestañas (como un navegador): la de su trabajo y la del chat.
 //
-//  DESPACHADOR (storyboard 2): ve los pedidos con su reloj en el
-//  computador, elige el municipio, llena la caja vacía (infinita)
-//  desde la repisa, la pone en el camión y empuja el botón.
+//  RECEPTOR: pestaña "Donantes": cada donante llega como una tarjeta
+//  con toda su información (nombre, cédula, qué dona y cuánto) y su
+//  paciencia; solo se acepta o se rechaza. Aceptado: su caja llega a
+//  la pila. Si la categoría está llena, hay que rechazarlo. Si se
+//  acaba la paciencia, se va y la donación se pierde. Abre cajas,
+//  clasifica y surte la repisa como en un jugador. A la derecha, el
+//  panel de estado de cada categoría.
+//
+//  DESPACHADOR: pestaña "Pedidos": los pedidos con su reloj, elige el
+//  municipio, llena la caja vacía (infinita) desde la repisa, la pone
+//  en el camión y empuja el botón.
 //
 //  COMPARTIDO: la repisa (lo que el receptor guarda aparece donde el
 //  despachador, y lo que este saca baja el contador del receptor),
@@ -37,18 +40,8 @@ import {
 import { ANGULO, ESCALA_GATO, mirarAlCentro } from './escena.js';
 import type { Agarrable } from './interaccion.js';
 import { OficinaSystem, cuentaNueva, type Cuenta } from './juego.js';
-import {
-  Chat,
-  Donante,
-  PUNTO_ESTADO,
-  Formulario,
-  NOMBRES,
-  PanelEstado,
-  Teclado,
-  normalizar,
-  type EstadoCat,
-  type MensajeChat,
-} from './multi-ui.js';
+import { Chat, PUNTO_ESTADO, NOMBRES, PanelEstado, type EstadoCat, type MensajeChat } from './multi-ui.js';
+import type { Aviso, DatosDonante } from './modelo.js';
 import type { Mensaje, Red, Rol } from './red.js';
 import { miniatura } from './miniaturas.js';
 import { aplicarOp, estadoInicial, sumar, vistaRepisa, type Compartido, type Op } from './compartido.js';
@@ -79,14 +72,13 @@ export class MultiSystem extends OficinaSystem {
 
   // Piezas de los roles
   private chat!: Chat;
-  private teclado = new Teclado();
-  private formulario: Formulario | null = null;
   private panelEstado: PanelEstado | null = null;
-  // Fila de donantes (receptor)
+  /** Último mensaje del chat ya visto (para marcar la pestaña). */
+  private chatLeido = 0;
+  // Donantes (receptor): tarjetas en la pestaña "Donantes".
   private agenda: { en: number; n: number }[] = [];
-  private fila: Donante[] = [];
+  private donantes: Aviso[] = [];
   private nDonante = 0;
-  private tarjetaAg: Agarrable | null = null;
 
   init(): void {
     // Las tareas extra de un jugador no aplican: aquí llegan donantes y pedidos compartidos.
@@ -110,35 +102,22 @@ export class MultiSystem extends OficinaSystem {
     const e = this.escena;
     this.tutorial = false;
     e.panel.saltar.activo = false;
-    // Mensajes encima del computador de la izquierda: solo con botones.
-    this.chat = new Chat(this.rol, 0.4, (cat) => miniatura(this.world.renderer, cat));
+    // La misma pantalla del computador con dos pestañas: su trabajo y el chat.
+    this.chat = new Chat(this.rol, 0.42, (cat) => miniatura(this.world.renderer, cat), true);
     this.chat.alEnviar = (texto, extra) => this.op({ tipo: 'chat', de: this.rol, texto, ...extra, hora: this.hora() });
     this.inter.botones.push(...this.chat.botones);
-    // Los mensajes a la izquierda del panel, a la altura de la vista.
-    e.sobre.add(this.chat.grupo);
-    e.ubicar(this.chat.grupo, ANGULO.mensajes);
+    this.chat.grupo.position.set(0, -0.024, 0.004);
+    this.chat.grupo.visible = false;
+    e.panel.grupo.add(this.chat.grupo);
+    e.panel.usarPestanas([this.rol === 'receptor' ? 'Donantes' : 'Pedidos', 'Chat']);
+    this.inter.botones.push(...e.panel.pestanas);
+    e.panel.alPestana = (k) => {
+      this.chat.grupo.visible = k === 1;
+      this.inter.pausarBotones(0.4);
+    };
 
     if (this.rol === 'receptor') {
-      // Izquierda: el formulario de registro en lugar del panel de avisos.
-      e.panel.grupo.visible = false;
-      this.formulario = new Formulario(0.44);
-      e.sobre.add(this.formulario.grupo);
-      e.ubicar(this.formulario.grupo, ANGULO.panel);
-      // El teclado solo sirve para el formulario (nombre, cédula, cantidad).
-      this.teclado.grupo.position.set(-0.66, 0.012, -0.13);
-      mirarAlCentro(this.teclado.grupo);
-      this.teclado.grupo.rotation.x = -1.15;
-      e.sobre.add(this.teclado.grupo);
-      this.teclado.alTecla = (letra) => this.formulario?.tecla(letra);
-      this.teclado.alBorrar = () => this.formulario?.borrar();
-      this.inter.botones.push(...this.teclado.teclas);
-      this.formulario.registrar.alPresionar = () => this.registrar();
-      this.formulario.rechazar.alPresionar = () => this.rechazarDonante();
-      this.inter.botones.push(...this.formulario.botones);
-      // "Mover oficina" pasa al formulario (el panel de avisos no se usa).
-      this.formulario.grupo.add(e.panel.mover.grupo, e.panel.recalibrar.grupo);
-      e.panel.mover.grupo.visible = true;
-      e.panel.recalibrar.grupo.visible = true;
+      e.panel.alRechazo = (aviso) => this.rechazarDonante(aviso);
       // Derecha: panel de estado del centro (sin camión ni despacho).
       for (const o of [e.camion, e.botonDespacho.grupo, e.letreroDespacho.malla, e.pedestal, this.cajaPedido.raiz, e.letreroPedido.malla]) {
         o.visible = false;
@@ -150,8 +129,6 @@ export class MultiSystem extends OficinaSystem {
       this.panelEstado.alCambiar = (i, valor) => this.op({ tipo: 'estado', i, valor });
       this.inter.botones.push(...this.panelEstado.botones.flat());
     } else {
-      // Despachador: chat encima del computador de necesidades.
-
       this.cajaInfinita = true;
       // Sin caneca: el despachador no clasifica donaciones.
       this.conCaneca = false;
@@ -168,7 +145,7 @@ export class MultiSystem extends OficinaSystem {
     this.limpiarFila();
     this.gato.decir(
       this.rol === 'receptor'
-        ? 'Eres el RECEPTOR: atiendes a los donantes, registras su donación y ordenas la repisa. Mira al frente y empuja "Colocar aquí".'
+        ? 'Eres el RECEPTOR: aceptas o rechazas a los donantes en la pantalla y ordenas la estantería. Mira al frente y empuja "Colocar aquí".'
         : 'Eres el DESPACHADOR: atiendes los pedidos de los municipios y los despachas en el camión. Mira al frente y empuja "Colocar aquí".',
       `Sala ${this.red.codigo}`,
     );
@@ -270,8 +247,8 @@ export class MultiSystem extends OficinaSystem {
     }
     this.gato.decir(
       this.rol === 'receptor'
-        ? `${DIAS[this.dia]}: llegan donantes a la fila. Registra cada uno antes de que se le acabe la paciencia.`
-        : `${DIAS[this.dia]}: revisa los pedidos en tu computador. Si falta algo en la estantería, pídeselo al receptor con los botones de mensajes.`,
+        ? `${DIAS[this.dia]}: los donantes llegan a la pantalla. Acepta o rechaza a cada uno antes de que se le acabe la paciencia.`
+        : `${DIAS[this.dia]}: revisa los pedidos en la pantalla. Si falta algo en la estantería, pídeselo al receptor en la pestaña Chat.`,
       DIAS[this.dia],
     );
   }
@@ -372,7 +349,7 @@ export class MultiSystem extends OficinaSystem {
         cuenta.sinEntregar++;
       }
     }
-    cuenta.perdidas += this.fila.length + this.agenda.length; // donantes sin atender
+    cuenta.perdidas += this.donantes.length + this.agenda.length; // donantes sin atender
     this.limpiarFila();
     this.inter.soltarTodo();
     this.fase = 'resumen';
@@ -428,24 +405,14 @@ export class MultiSystem extends OficinaSystem {
     }
   }
 
+  /** Quita las tarjetas de donantes de la pantalla. */
   private limpiarFila(): void {
-    for (const d of this.fila) {
-      d.grupo.removeFromParent();
-      d.tarjeta.removeFromParent();
-    }
-    this.fila = [];
-    if (this.tarjetaAg) {
-      const i = this.inter.agarrables.indexOf(this.tarjetaAg);
-      if (i >= 0) {
-        this.inter.agarrables.splice(i, 1);
-      }
-      this.tarjetaAg = null;
-    }
-    this.formulario?.limpiar();
+    this.avisos = this.avisos.filter((x) => x.tipo !== 'donante');
+    this.donantes = [];
   }
 
   /** Datos del donante n del día (iguales cada vez: azar con semilla). */
-  private datosDonante(n: number): Donante['datos'] {
+  private datosDonante(n: number): Omit<DatosDonante, 'paciencia' | 'pacienciaMax'> {
     const r = azar(this.dia * 1000 + n * 37 + 11);
     // Lo que la gente trae depende del panel de estado (menos de lo que no se necesita).
     const peso = (e: EstadoCat) => (e === 'urgente' ? 2.2 : e === 'necesita' ? 1 : 0.3);
@@ -473,165 +440,82 @@ export class MultiSystem extends OficinaSystem {
     while (this.agenda.length && this.tDia >= this.agenda[0].en) {
       const { n } = this.agenda.shift()!;
       const paciencia = Math.max(35, 80 - this.dia * 10);
-      const d = new Donante(this.datosDonante(n), paciencia, this.nDonante++);
-      this.escena.raiz.add(d.grupo);
-      this.fila.push(d);
-      d.grupo.position.set(-1.7, 0, -0.9);
-      this.colocarFila();
-      if (this.fila.length === 1) {
-        this.alFrente();
-      }
+      const datos = this.datosDonante(n);
+      this.nDonante++;
+      const aviso = this.avisar({
+        tipo: 'donante',
+        texto: `Llegó ${datos.nombre}`,
+        accion: 'Aceptar',
+        rechazo: 'Rechazar',
+        donante: { ...datos, paciencia, pacienciaMax: paciencia },
+      });
+      this.donantes.push(aviso);
     }
-    // Paciencia: el de adelante la gasta toda; los de atrás, más despacio.
-    for (let i = this.fila.length - 1; i >= 0; i--) {
-      const d = this.fila[i];
+    // Paciencia: el primero la gasta toda; los de atrás, más despacio.
+    for (let i = this.donantes.length - 1; i >= 0; i--) {
+      const a = this.donantes[i];
+      const d = a.donante!;
       d.paciencia -= dt * (i === 0 ? 1 : 0.4);
-      d.pintarBarra();
-      d.grupo.lookAt(this.cabeza.x, 0, this.cabeza.z);
       if (d.paciencia <= 0) {
         this.cuenta.perdidas++;
         sonidos.error();
-        this.gato.decir(`${d.datos.nombre} se cansó de esperar y se fue. Su donación se perdió.`);
-        this.despedir(i);
-      }
-    }
-    // Pista: si la fila está llena, avisa.
-    const f = this.formulario;
-    if (f && this.fila[0]) {
-      const i = indiceCategoria(this.fila[0].datos.cat);
-      if (this.filaLlena(i) && !f.mensaje.startsWith('No se puede')) {
-        f.mensaje = `No se puede recibir: ${CATEGORIAS[i].corto.toLowerCase()} está llena. Rechaza la donación.`;
-        f.colorMensaje = COLOR.rojo;
+        this.gato.decir(`${d.nombre} se cansó de esperar y se fue. Su donación se perdió.`);
+        this.cerrarDonante(a, 'Se cansó de esperar: la donación se perdió.');
       }
     }
   }
 
-  /** La fila de donantes, afuera del ala izquierda (en el piso). */
-  private colocarFila(): void {
-    this.fila.forEach((d, i) => {
-      const destino = new Vector3(-1.2 - i * 0.42, 0, -0.62 - i * 0.12);
-      this.anim.mover(d.grupo, destino, 0.9);
-    });
+  /** La tarjeta del donante queda resuelta (se ve un momento y se va). */
+  private cerrarDonante(a: Aviso, texto: string): void {
+    a.texto = texto;
+    this.resolver(a);
+    const k = this.donantes.indexOf(a);
+    if (k >= 0) {
+      this.donantes.splice(k, 1);
+    }
   }
 
-  /** El donante de adelante deja su tarjeta en la mesa. */
-  private alFrente(): void {
-    const d = this.fila[0];
-    const f = this.formulario;
-    if (!d || !f) {
+  /** Aceptar en la tarjeta de un donante: su caja llega a la pila (si cabe). */
+  protected accionAviso(aviso: Aviso): void {
+    if (aviso.tipo !== 'donante') {
+      super.accionAviso(aviso);
       return;
     }
-    f.limpiar();
-    f.mensaje = `Llegó ${d.datos.nombre}. Copia los datos de su tarjeta y empuja Registrar.`;
-    f.colorMensaje = COLOR.carbon;
-    const tarjeta = d.tarjeta;
-    tarjeta.position.set(-0.5, 0.06, -0.56);
-    tarjeta.rotation.set(-0.9, 0, 0);
-    mirarAlCentro(tarjeta);
-    tarjeta.rotation.x = -0.9;
-    this.escena.sobre.add(tarjeta);
-    tarjeta.scale.setScalar(0.02);
-    this.anim.mover(tarjeta, null, 0.4, { escala: 1 });
-    sonidos.burbuja();
-    // Se puede agarrar con la mano para acercarla al teclado.
-    this.tarjetaAg = {
-      obj: tarjeta,
-      activo: () => this.fase === 'jornada',
-      tomar: () => tarjeta,
-      soltar: (obj: Object3D) => {
-        if (obj.position.y < -0.02) {
-          obj.position.set(-0.5, 0.06, -0.56);
-        }
-      },
-    };
-    this.inter.agarrables.push(this.tarjetaAg);
-  }
-
-  private despedir(i: number): void {
-    const d = this.fila[i];
-    this.fila.splice(i, 1);
-    if (i === 0) {
-      if (this.tarjetaAg) {
-        const k = this.inter.agarrables.indexOf(this.tarjetaAg);
-        if (k >= 0) {
-          this.inter.agarrables.splice(k, 1);
-        }
-        this.tarjetaAg = null;
-      }
-      d.tarjeta.removeFromParent();
-    }
-    // Se va caminando hacia afuera.
-    this.anim.mover(d.grupo, new Vector3(-2.4, 0, -0.4), 1.4, {
-      escala: 0.02,
-      fin: () => d.grupo.removeFromParent(),
-    });
-    this.colocarFila();
-    if (i === 0) {
-      this.alFrente();
-    }
-  }
-
-  private registrar(): void {
-    const d = this.fila[0];
-    const f = this.formulario;
-    if (!d || !f) {
-      return;
-    }
-    const i = indiceCategoria(d.datos.cat);
+    const d = aviso.donante!;
+    const i = indiceCategoria(d.cat);
     if (this.filaLlena(i)) {
       sonidos.error();
-      f.mensaje = `No se puede recibir: ${CATEGORIAS[i].corto.toLowerCase()} está llena. Rechaza la donación.`;
-      f.colorMensaje = COLOR.rojo;
-      f.errores.add('categoria');
+      this.escena.panel.avisar(`${CATEGORIAS[i].corto} está llena: rechaza esta donación`, this.tiempo);
+      this.gato.decir(`No se puede recibir: ${CATEGORIAS[i].corto.toLowerCase()} ya tiene 30. Rechaza la donación.`);
       return;
     }
-    f.errores.clear();
-    if (normalizar(f.valores.nombre) !== normalizar(d.datos.nombre)) {
-      f.errores.add('nombre');
-    }
-    if (!/^\d{8,10}$/.test(f.valores.cedula) || f.valores.cedula !== d.datos.cedula) {
-      f.errores.add('cedula');
-    }
-    if (f.categoria !== d.datos.cat) {
-      f.errores.add('categoria');
-    }
-    if (Number(f.valores.cantidad) !== d.datos.cantidad) {
-      f.errores.add('cantidad');
-    }
-    if (f.errores.size) {
-      sonidos.error();
-      f.mensaje = 'Revisa los campos en rojo: no coinciden con la tarjeta.';
-      f.colorMensaje = COLOR.rojo;
-      return;
-    }
-    // Aceptada: su caja llega a la pila.
     sonidos.logro();
     this.cuenta.atendidos++;
     this.cuenta.puntos += 20;
     const danados = JORNADAS[this.dia].danados;
-    const r = azar(this.dia * 77 + this.nDonante * 13);
-    this.nuevaCaja(Array.from({ length: d.datos.cantidad }, () => ({ cat: d.datos.cat, danado: r() < danados })));
-    this.gato.decir(`¡Registrada! La caja de ${d.datos.nombre} está en la pila.`);
-    this.despedir(0);
+    const r = azar(this.dia * 77 + this.nDonante * 13 + aviso.id);
+    this.nuevaCaja(Array.from({ length: d.cantidad }, () => ({ cat: d.cat, danado: r() < danados })));
+    this.gato.decir(`¡Aceptada! La caja de ${d.nombre} está en la pila.`);
+    this.cerrarDonante(aviso, 'Aceptada: su caja está en la pila.');
   }
 
-  private rechazarDonante(): void {
-    const d = this.fila[0];
-    if (!d) {
+  private rechazarDonante(aviso: Aviso): void {
+    const d = aviso.donante;
+    if (!d || aviso.estado !== 'pendiente') {
       return;
     }
-    const i = indiceCategoria(d.datos.cat);
+    const i = indiceCategoria(d.cat);
     this.cuenta.rechazadas++;
     if (this.filaLlena(i)) {
       sonidos.clic();
       this.op({ tipo: 'chat', de: this.rol, texto: `${CATEGORIAS[i].corto}: categoría llena`, clave: 'llena', hora: this.hora() });
-      this.gato.decir('Bien: esa fila estaba llena. Le avisé al despachador con un mensaje.');
+      this.gato.decir('Bien: esa categoría estaba llena. Le avisé al despachador con un mensaje.');
     } else {
       this.cuenta.errores++;
       sonidos.error();
       this.gato.decir(`Esa donación sí se podía recibir: ${CATEGORIAS[i].corto.toLowerCase()} tenía espacio.`);
     }
-    this.despedir(0);
+    this.cerrarDonante(aviso, 'Rechazada.');
   }
 
   // ---- Cada cuadro ---------------------------------------------------
@@ -648,13 +532,24 @@ export class MultiSystem extends OficinaSystem {
         this.red.enviar({ type: 'estado', payload: this.comp });
       }
     }
-    // Chat, formulario y panel de estado (unas 5 veces por segundo).
+    // Chat y panel de estado (unas 5 veces por segundo).
     this.tPintarMulti -= dt;
     if (this.tPintarMulti <= 0) {
       this.tPintarMulti = 0.2;
       this.chat.pintar(this.comp.chat, this.red.conectado);
-      this.formulario?.pintar(this.fila.length > 0, this.tiempo);
       this.panelEstado?.pintar(this.comp.estados);
+      // Pestaña del chat: cuántos mensajes nuevos del compañero sin leer.
+      const panel = this.escena.panel;
+      const ultimo = this.comp.chat[this.comp.chat.length - 1]?.id ?? 0;
+      if (panel.enChat) {
+        this.chatLeido = ultimo;
+      }
+      const sinLeer = this.comp.chat.filter((m) => m.de !== this.rol && m.id > this.chatLeido).length;
+      const pestana = panel.pestanas[1];
+      const texto = sinLeer > 0 ? `Chat (${sinLeer})` : 'Chat';
+      if (pestana && pestana.texto !== texto) {
+        pestana.escribir(texto);
+      }
     }
     // El invitado repite "listo" hasta que el anfitrión lo confirme (por si se perdió).
     if (this.fase === 'espera' && this.colocado && !this.red.anfitrion && !this.comp.listos.invitado && this.tiempo - this.tListo > 2) {

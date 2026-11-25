@@ -28,6 +28,7 @@ const ESTILO: Record<string, { fondo: string; texto: string; titulo: string }> =
   urgente: { fondo: '#FCE8E8', texto: COLOR.rojoProfundo, titulo: 'URGENTE' },
   alerta: { fondo: '#FCE8E8', texto: COLOR.rojoProfundo, titulo: 'ALERTA' },
   entrega: { fondo: COLOR.verde, texto: '#FFFFFF', titulo: 'ENTREGADO' },
+  donante: { fondo: '#DCE8F0', texto: COLOR.azul, titulo: 'DONANTE' },
 };
 
 
@@ -46,6 +47,13 @@ export function reloj(seg: number): string {
 export class Panel {
   readonly grupo = new Group();
   readonly botonesAviso: Boton3D[] = [];
+  /** Segundo botón de cada tarjeta ("Rechazar" para los donantes). */
+  readonly botonesRechazo: Boton3D[] = [];
+  /** Pestañas (multijugador): botones arriba de la pantalla, como un navegador. */
+  readonly pestanas: Boton3D[] = [];
+  pestana = 0;
+  alPestana: (k: number) => void = () => undefined;
+  alRechazo: (aviso: Aviso) => void = () => undefined;
   readonly botonesMunicipio: Boton3D[] = [];
   readonly volver: Boton3D;
   readonly mover: Boton3D;
@@ -75,6 +83,19 @@ export class Panel {
         }
       };
       this.botonesAviso.push(b);
+    }
+    // Segundo botón de cada tarjeta (Rechazar), debajo del de acción.
+    for (let i = 0; i < TARJETAS; i++) {
+      const b = new Boton3D('Rechazar', 0.105, 0.034, BOTON.peligro);
+      b.activo = false;
+      this.colocar(b, 945, Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2 + 50);
+      b.alPresionar = () => {
+        const aviso = this.visibles[i];
+        if (aviso && aviso.estado === 'pendiente' && aviso.rechazo) {
+          this.alRechazo(aviso);
+        }
+      };
+      this.botonesRechazo.push(b);
     }
     // Lista de municipios: 3 columnas × 6 filas.
     MUNICIPIOS.forEach((nombre, i) => {
@@ -106,7 +127,43 @@ export class Panel {
   }
 
   get todosLosBotones(): Boton3D[] {
-    return [...this.botonesAviso, ...this.botonesMunicipio, this.volver, this.mover, this.recalibrar, this.saltar];
+    return [
+      ...this.botonesAviso,
+      ...this.botonesRechazo,
+      ...this.botonesMunicipio,
+      ...this.pestanas,
+      this.volver,
+      this.mover,
+      this.recalibrar,
+      this.saltar,
+    ];
+  }
+
+  /**
+   * Dos pestañas arriba de la pantalla, como en un navegador (multijugador):
+   * la 0 es la de avisos (donantes o pedidos) y la 1 la del chat.
+   */
+  usarPestanas(nombres: [string, string]): void {
+    nombres.forEach((nombre, k) => {
+      const b = new Boton3D(nombre, 0.13, 0.034, k === 0 ? BOTON.principal : BOTON.secundario);
+      this.colocar(b, 330 + k * 340, 62);
+      b.alPresionar = () => this.cambiarPestana(k);
+      this.pestanas.push(b);
+    });
+  }
+
+  cambiarPestana(k: number): void {
+    if (this.pestana === k) {
+      return;
+    }
+    this.pestana = k;
+    this.pestanas.forEach((b, i) => b.escribir(b.texto, i === k ? BOTON.principal : BOTON.secundario));
+    this.alPestana(k);
+  }
+
+  /** ¿Se está viendo la pestaña del chat? */
+  get enChat(): boolean {
+    return this.pestanas.length > 0 && this.pestana === 1;
   }
 
   private colocar(b: Boton3D, px: number, py: number): void {
@@ -155,11 +212,32 @@ export class Panel {
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
     ctx.fillStyle = COLOR.azul;
-    ctx.font = `900 46px ${FUENTE}`;
-    ctx.fillText(this.modo === 'avisos' ? 'Avisos' : 'Destino del pedido', 150, 88);
-    ctx.textAlign = 'right';
-    ctx.font = `700 36px ${FUENTE}`;
-    ctx.fillText(`${dia} · ${hora}`, PX_ANCHO - 50, 86);
+    if (this.pestanas.length) {
+      // Barra de pestañas (los botones van encima) y la hora.
+      ctx.fillStyle = '#E8E1D5';
+      rect(ctx, 150, 22, PX_ANCHO - 200, 82, 22);
+      ctx.fill();
+      ctx.fillStyle = COLOR.azul;
+      ctx.textAlign = 'right';
+      ctx.font = `700 30px ${FUENTE}`;
+      ctx.fillText(hora, PX_ANCHO - 70, 76);
+    } else {
+      ctx.font = `900 46px ${FUENTE}`;
+      ctx.fillText(this.modo === 'avisos' ? 'Avisos' : 'Destino del pedido', 150, 88);
+      ctx.textAlign = 'right';
+      ctx.font = `700 36px ${FUENTE}`;
+      ctx.fillText(`${dia} · ${hora}`, PX_ANCHO - 50, 86);
+    }
+    // Pestaña del chat: el chat se dibuja encima; aquí no va nada más.
+    const enChat = this.enChat;
+    this.botonesMunicipio.forEach((b) => (b.activo = !enChat && this.modo === 'municipios'));
+    this.volver.activo = !enChat && this.modo === 'municipios';
+    if (enChat) {
+      this.botonesAviso.forEach((b) => (b.activo = false));
+      this.botonesRechazo.forEach((b) => (b.activo = false));
+      l.listo();
+      return;
+    }
 
     if (this.modo === 'municipios') {
       const p = this.eligiendo;
@@ -177,8 +255,17 @@ export class Panel {
       const a = this.visibles[i];
       b.activo = !!a && a.estado === 'pendiente' && !!a.accion;
       if (b.activo && a.accion) {
-        b.escribir(a.accion);
+        if (b.texto !== a.accion) {
+          b.escribir(a.accion);
+        }
+        // Con dos botones, el de acción sube un poco.
+        const y = Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2 + (a.rechazo ? -46 : 0);
+        this.colocar(b, 945, y);
       }
+    });
+    this.botonesRechazo.forEach((b, i) => {
+      const a = this.visibles[i];
+      b.activo = !!a && a.estado === 'pendiente' && !!a.rechazo;
     });
     if (this.visibles.length === 0) {
       ctx.textAlign = 'center';
@@ -220,6 +307,31 @@ export class Panel {
     ctx.fillText(a.estado === 'hecho' ? `✓ HECHO` : estilo.titulo, 60, y + 46);
     ctx.font = `700 36px ${FUENTE}`;
     const ancho = a.estado === 'pendiente' && a.accion ? PX_ANCHO - 400 : PX_ANCHO - 130;
+    const d = a.donante;
+    if (d) {
+      // Tarjeta del donante: toda la información y su paciencia.
+      ctx.font = `900 34px ${FUENTE}`;
+      ctx.fillText(d.nombre, 60, y + 88, ancho);
+      ctx.font = `400 28px ${FUENTE}`;
+      const cat = CATEGORIAS.find((c) => c.id === d.cat)?.nombre ?? d.cat;
+      ctx.fillText(`Cédula ${d.cedula} · Dona ${d.cantidad} de ${cat}`, 60, y + 128, ancho);
+      if (a.estado === 'pendiente') {
+        const k = Math.max(0, Math.min(1, d.paciencia / Math.max(1, d.pacienciaMax)));
+        ctx.fillStyle = 'rgba(1, 30, 65, 0.18)';
+        rect(ctx, 60, y + ALTO_TARJETA - 44, ancho, 18, 9);
+        ctx.fill();
+        ctx.fillStyle = k < 0.3 ? COLOR.rojo : k < 0.6 ? COLOR.naranja : COLOR.verde;
+        rect(ctx, 60, y + ALTO_TARJETA - 44, Math.max(18, ancho * k), 18, 9);
+        ctx.fill();
+        ctx.fillStyle = colorTexto;
+        ctx.font = `700 22px ${FUENTE}`;
+        ctx.fillText('Paciencia', 60, y + ALTO_TARJETA - 52);
+      } else {
+        ctx.font = `700 28px ${FUENTE}`;
+        ctx.fillText(a.texto, 60, y + ALTO_TARJETA - 28, ancho);
+      }
+      return;
+    }
     const texto = lineas(ctx, a.texto, ancho).slice(0, 2);
     texto.forEach((t, k) => ctx.fillText(t, 60, y + 96 + k * 44));
     // Reloj del pedido en curso.

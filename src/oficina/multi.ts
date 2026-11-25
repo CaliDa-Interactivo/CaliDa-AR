@@ -89,6 +89,8 @@ export class MultiSystem extends OficinaSystem {
   private tarjetaAg: Agarrable | null = null;
 
   init(): void {
+    // Las tareas extra de un jugador no aplican: aquí llegan donantes y pedidos compartidos.
+    this.generarExtras = false;
     this.red = (this.world.globals as Record<string, unknown>).red as Red;
     this.rol = this.red.rol;
     super.init();
@@ -135,6 +137,8 @@ export class MultiSystem extends OficinaSystem {
       this.inter.botones.push(...this.formulario.botones);
       // "Mover oficina" pasa al formulario (el panel de avisos no se usa).
       this.formulario.grupo.add(e.panel.mover.grupo, e.panel.recalibrar.grupo);
+      e.panel.mover.grupo.visible = true;
+      e.panel.recalibrar.grupo.visible = true;
       // Derecha: panel de estado del centro (sin camión ni despacho).
       for (const o of [e.camion, e.botonDespacho.grupo, e.letreroDespacho.malla, e.pedestal, this.cajaPedido.raiz, e.letreroPedido.malla]) {
         o.visible = false;

@@ -632,6 +632,22 @@ export class Repisa {
     return -1;
   }
 
+  /** ¿El punto del mundo está dentro del compartimiento, al menos `margen` adentro de sus bordes? */
+  dentroDeZona(i: number, mundo: Vector3, margen: number): boolean {
+    const zona = this.zonas[i];
+    if (!zona) {
+      return false;
+    }
+    const local = zona.worldToLocal(this.auxiliar.copy(mundo));
+    const g = zona.geometry as BoxGeometry;
+    const { width, height, depth } = g.parameters;
+    const k = this.grupo.scale.x || 1;
+    const m = margen / k;
+    return Math.abs(local.x) < width / 2 - m && Math.abs(local.y) < height / 2 - m && Math.abs(local.z) < depth / 2 - m;
+  }
+
+  private auxiliar = new Vector3();
+
   /** Marca solo ese compartimiento (blanco, verde o rojo; null lo apaga). */
   marcar(i: number, color: string | null): void {
     const m = this.zonas[i]?.material as MeshBasicMaterial | undefined;

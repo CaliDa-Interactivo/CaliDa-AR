@@ -92,13 +92,16 @@ export class Panel {
     const yMenu = -ALTO_PANEL / 2 - 0.05;
     this.mover = new Boton3D('Mover oficina', 0.135, 0.036, BOTON.secundario);
     this.mover.grupo.position.set(-0.145, yMenu, 0.09);
-    this.grupo.add(this.mover.grupo);
     this.recalibrar = new Boton3D('Recalibrar altura', 0.145, 0.036, BOTON.secundario);
     this.recalibrar.grupo.position.set(0, yMenu, 0.09);
-    this.grupo.add(this.recalibrar.grupo);
     this.saltar = new Boton3D('Saltar tutorial', 0.135, 0.036, BOTON.secundario);
     this.saltar.grupo.position.set(0.145, yMenu, 0.09);
-    this.grupo.add(this.saltar.grupo);
+    // Estos tres botones ya no van debajo del monitor (se pidió quitarlos):
+    // quedan ocultos (no se pueden presionar); el multijugador puede ponerlos
+    // en su formulario.
+    for (const b of [this.mover, this.recalibrar, this.saltar]) {
+      b.grupo.visible = false;
+    }
     this.verAvisos();
   }
 

@@ -357,21 +357,80 @@ export const MATERIAL_LINEA = new MeshBasicMaterial({
 /** Grosor de la línea blanca (m). */
 export const GROSOR_LINEA = 0.0022;
 
+/** Tramos del antebrazo desde la muñeca: [largo hasta el final del tramo (m), radio relativo]. */
+const ANTEBRAZO: [number, number][] = [
+  [0.11, 1.15],
+  [0.27, 1.45],
+];
+
 /**
- * La mano real tapa lo virtual a ras (radio real, sin margen). No se dibuja
- * nada de la mano (ni línea): se ve la mano real (passthrough).
+ * La mano real tapa lo virtual a ras (radio real, sin margen) y también el
+ * antebrazo (desde la muñeca hacia el codo, en la dirección del giro de la
+ * muñeca). No se dibuja nada: se ve la mano real (passthrough).
  */
 export class OclusorManos {
   readonly grupo = new Group();
   private tapa = new PiezasMano({ material: MATERIAL_TAPA, margen: 0, orden: -10, palma: true, contorno: false });
   private datos: (DatosMano | null)[] = [null, null];
+  private brazoCil: InstancedMesh;
+  private brazoEsf: InstancedMesh;
+  private m = new Matrix4();
+  private a = new Vector3();
+  private b = new Vector3();
+  private d = new Vector3();
+  private e = new Vector3();
+  private c = new Vector3();
+  private q = new Quaternion();
+  private s = new Vector3();
+  private arriba = new Vector3(0, 1, 0);
 
   constructor() {
-    this.grupo.add(this.tapa.grupo);
+    this.brazoCil = new InstancedMesh(new CylinderGeometry(1, 1, 1, 14, 1, true), MATERIAL_TAPA, ANTEBRAZO.length * 2);
+    this.brazoEsf = new InstancedMesh(new SphereGeometry(1, 14, 10), MATERIAL_TAPA, ANTEBRAZO.length * 2);
+    for (const malla of [this.brazoCil, this.brazoEsf]) {
+      malla.renderOrder = -10;
+      malla.frustumCulled = false;
+      malla.count = 0;
+      malla.userData.sinContorno = true;
+    }
+    this.grupo.add(this.tapa.grupo, this.brazoCil, this.brazoEsf);
   }
 
   actualizar(manos: Mano[]): void {
     manos.forEach((mano, k) => (this.datos[k] = mano.conArticulaciones ? mano : null));
     this.tapa.actualizar(this.datos);
+    let nC = 0;
+    let nE = 0;
+    for (const mano of manos) {
+      if (!mano.conArticulaciones) {
+        continue;
+      }
+      const p = mano.articulaciones;
+      // Hacia el codo: +Z de la muñeca, con el sentido que se aleja de la palma.
+      this.d.set(0, 0, 1).applyQuaternion(mano.giro);
+      this.e.set(p[0] - p[30], p[1] - p[31], p[2] - p[32]);
+      if (this.d.dot(this.e) < 0) {
+        this.d.negate();
+      }
+      const base = radioSeguro(mano.radios[0]);
+      let desde = 0;
+      for (const [hasta, rel] of ANTEBRAZO) {
+        const radio = Math.max(0.02, base) * rel;
+        this.a.set(p[0], p[1], p[2]).addScaledVector(this.d, desde);
+        this.b.set(p[0], p[1], p[2]).addScaledVector(this.d, hasta);
+        this.q.setFromUnitVectors(this.arriba, this.d);
+        this.s.set(radio, hasta - desde, radio);
+        this.c.copy(this.a).add(this.b).multiplyScalar(0.5);
+        this.m.compose(this.c, this.q, this.s);
+        this.brazoCil.setMatrixAt(nC++, this.m);
+        this.m.makeScale(radio, radio, radio).setPosition(this.b.x, this.b.y, this.b.z);
+        this.brazoEsf.setMatrixAt(nE++, this.m);
+        desde = hasta;
+      }
+    }
+    this.brazoCil.count = nC;
+    this.brazoEsf.count = nE;
+    this.brazoCil.instanceMatrix.needsUpdate = true;
+    this.brazoEsf.instanceMatrix.needsUpdate = true;
   }
 }

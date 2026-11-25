@@ -66,6 +66,11 @@ const BOTON_DESPACHO = new Vector3(0.64, 0, -0.1);
 /** Estantería: lo más cerca posible sin tapar la zona de trabajo. */
 const Z_REPISA = -0.62;
 /**
+ * El gato (y su reloj) van hacia la izquierda de la estantería: su globo, a
+ * la derecha, queda encima de la estantería y alineado con ella.
+ */
+const X_GATO = -0.27;
+/**
  * Huella de la estantería sobre la mesa (coordenadas de la oficina, sin
  * achicar): es lo que debe quedar sobre una superficie real al colocarla.
  */
@@ -124,7 +129,7 @@ export class Escena {
     this.sobre.add(sombraRepisa);
 
     // Reloj del día, encima de la repisa.
-    this.reloj.malla.position.set(0, ALTO_REPISA + 0.08, Z_REPISA - 0.03);
+    this.reloj.malla.position.set(X_GATO, ALTO_REPISA + 0.08, Z_REPISA - 0.03);
     this.sobre.add(this.reloj.malla);
 
     // Caneca de descarte (abierta) sobre la mesa.
@@ -267,7 +272,7 @@ export class Escena {
 
   /** Puesto del gato: encima de la estantería, con el reloj digital a sus pies (coordenadas de la raíz). */
   puestoGato(salida: Vector3): Vector3 {
-    return salida.set(0, this.alto + this.techoRepisa, Z_REPISA - 0.03);
+    return salida.set(X_GATO * this.repisa.grupo.scale.x, this.alto + this.techoRepisa, Z_REPISA - 0.03);
   }
 
   /**
@@ -289,7 +294,7 @@ export class Escena {
     const k = Math.min(1, Math.max(0.75, (techo - this.alto) / this.repisa.alturaFilaArriba));
     this.repisa.grupo.scale.setScalar(k);
     // Reloj al frente del techo de la estantería, donde el gato pone los pies.
-    this.reloj.malla.position.set(0, ALTO_REPISA * k + 0.022, Z_REPISA + 0.105 * k);
+    this.reloj.malla.position.set(X_GATO * k, ALTO_REPISA * k + 0.022, Z_REPISA + 0.105 * k);
     // Paneles a la altura de la vista.
     this.ubicados.forEach((u, obj) => this.ponerPanel(obj, u.angulo, u.distancia));
     return this.alto;

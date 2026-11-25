@@ -48,6 +48,7 @@ import {
   PESO_CATEGORIA,
   subAlAzar,
   idProducto,
+  MUNICIPIOS,
   indiceCategoria,
   nombreProducto,
   pedirPorProducto,
@@ -536,7 +537,7 @@ export class OficinaSystem extends createSystem({}) {
     this.escena.ajustarErgonomia(this.cabeza.y - this.escena.raiz.position.y, this.mesaReal);
     this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.5, { arco: 0.08, escala: ESCALA_GATO });
     sonidos.pop();
-    this.gato.decir('Listo: ajusté la mesa, la estantería y los paneles a tu estatura. Si no estabas de pie, párate derecho y vuelve a empujarlo.', 'Altura');
+    this.gato.decir('Listo: ajusté la mesa, la estantería y las pantallas a tu estatura. Si no estabas de pie, párate derecho y vuelve a empujarlo.', 'Altura');
   }
 
   /** Qué pasa la primera vez que se coloca la oficina. */
@@ -586,9 +587,9 @@ export class OficinaSystem extends createSystem({}) {
     if (this.dia > 0) {
       this.tutorial = false;
     }
-    this.escena.panel.saltar.activo = this.tutorial;
+    this.escena.panel.saltar.activo = false; // ya no hay botón de saltar el tutorial bajo el monitor
     const frases = [
-      'Soy tu guía. Cuando suene la campana, revisa el panel de la izquierda: ahí llegan las donaciones y los pedidos.',
+      'Soy tu guía. Cuando suene la campana, revisa la pantalla de la izquierda: ahí llegan las donaciones y los pedidos.',
       '¡Arranca el martes! Hoy llegan más cajas y vienen más cosas dañadas.',
       'Miércoles: los pedidos llegan con menos tiempo. ¡Atenta a las urgencias!',
       'Jueves: llueve en varios municipios. Habrá más pedidos urgentes.',
@@ -637,7 +638,7 @@ export class OficinaSystem extends createSystem({}) {
           accion: 'Recibidas',
           cajas: e.cantidad,
         });
-        this.pista('recibir', 'Llegaron donaciones. Empuja "Recibidas" en el panel con la punta del índice.', this.puntoPanel());
+        this.pista('recibir', 'Llegaron donaciones. Empuja "Recibidas" en la pantalla con la punta del índice.', this.puntoPanel());
       } else {
         const p: Pedido = {
           id: this.idAviso + 1,
@@ -867,8 +868,10 @@ export class OficinaSystem extends createSystem({}) {
     const abierta: Agarrable = {
       obj: new Group(),
       palmaLibre: true,
-      // La pinza entra por arriba de la caja abierta: un poco más de alcance.
+      // La pinza entra por arriba de la caja abierta: un poco más de alcance, y
+      // le gana a la estantería que está detrás.
       alcance: 0.07,
+      prioridad: 2,
       activo: () => this.fase === 'jornada' && this.trabajo?.estado === 'abierta' && this.trabajo.objetos.length > 0,
       tomar: (mano) => {
         const caja = this.trabajo!;
@@ -904,8 +907,11 @@ export class OficinaSystem extends createSystem({}) {
       const resalte = { poner: (c: string | null) => e.repisa.marcar(i, c) };
       const fila: Agarrable = {
         obj: zona,
-        // Hay que meter la pinza en el compartimiento (no basta con acercarla).
+        // Hay que meter la pinza bien adentro del compartimiento (no basta con
+        // acercarla) y lo demás le gana (la caja, los objetos sueltos).
         alcance: 0.008,
+        prioridad: 0,
+        contiene: (p) => e.repisa.dentroDeZona(i, p, 0.015),
         activo: () => this.fase === 'jornada' && e.repisa.cantidades[i] > 0,
         tomar: (mano) => {
           // Del producto (columna) donde está la mano.
@@ -1229,7 +1235,7 @@ export class OficinaSystem extends createSystem({}) {
       this.gato.decir(
         p
           ? `El pedido de ${p.municipio} no necesita ${nombreProducto(id).toLowerCase()}. Pide: ${textoPedido(p, false)}.`
-          : 'Primero acepta un pedido en el panel.',
+          : 'Primero acepta un pedido en la pantalla.',
       );
       this.devolver(oj);
       return;
@@ -1272,7 +1278,7 @@ export class OficinaSystem extends createSystem({}) {
       return 'El camión está en ruta';
     }
     if (!p) {
-      return this.pedidos.some((x) => x.estado === 'elegir') ? 'Elige el municipio en el panel' : 'No hay pedido en curso';
+      return this.pedidos.some((x) => x.estado === 'elegir') ? 'Elige el municipio en la pantalla' : 'No hay pedido en curso';
     }
     const falta = faltantes(p, nombreProducto);
     if (falta.length) {
@@ -1732,6 +1738,55 @@ export class OficinaSystem extends createSystem({}) {
     this.carteles(dt);
   }
 
+  /** Segundos que la persona lleva sin nada que hacer. */
+  protected tSinTareas = 0;
+  protected extras = 0;
+  /** Un jugador: sí. El multijugador maneja sus propias llegadas (donantes, pedidos). */
+  protected generarExtras = true;
+
+  /**
+   * Nunca sin tareas: si no hay cajas, objetos, pedidos ni avisos pendientes
+   * durante 6 s (y al día le quedan más de 35 s), llega una tarea nueva:
+   * se alternan una caja y un encargo pequeño con productos que sí hay en la
+   * estantería.
+   */
+  protected siempreConTareas(dt: number): void {
+    const ocioso =
+      this.cola === 0 &&
+      this.pila.length === 0 &&
+      !this.trabajo &&
+      this.sueltos.every((x) => x.o.clasificado) &&
+      this.pedidos.every((x) => x.estado === 'entregado' || x.estado === 'perdido') &&
+      this.avisos.every((a) => a.estado === 'hecho');
+    const quedan = JORNADAS[this.dia].duracion - this.tDia;
+    if (!this.generarExtras || !ocioso || quedan < 35) {
+      this.tSinTareas = 0;
+      return;
+    }
+    this.tSinTareas += dt;
+    if (this.tSinTareas < 6) {
+      return;
+    }
+    this.tSinTareas = 0;
+    this.extras++;
+    // Encargo con algo que haya en la estantería; si no hay nada, una caja.
+    const conStock = CATEGORIAS.map((c, i) => ({ id: c.id, n: this.escena.repisa.cantidades[i] })).filter((c) => c.n >= 2);
+    if (this.extras % 2 === 0 && conStock.length > 0) {
+      const c = conStock[this.extras % conStock.length];
+      this.cuentas[this.dia].pedidos++;
+      this.evento({
+        tipo: 'pedido',
+        en: this.tDia,
+        municipio: MUNICIPIOS[(this.dia * 5 + this.extras * 7) % MUNICIPIOS.length],
+        pide: { [c.id]: this.extras % 4 === 0 ? 2 : 1 },
+        plazo: 70,
+        familias: 2,
+      });
+    } else {
+      this.evento({ tipo: 'cajas', en: this.tDia, cantidad: 1 });
+    }
+  }
+
   protected jornada(dt: number): void {
     this.avanzarReloj(dt);
     // Las cajas recibidas llegan de a una.
@@ -1754,6 +1809,7 @@ export class OficinaSystem extends createSystem({}) {
       }
     }
     this.avanzarPedidos(dt);
+    this.siempreConTareas(dt);
     this.moverCamion(dt);
     // Puertas traseras: se abren mientras se lleva la caja COMPLETA o mientras entra.
     const conCaja = [...this.manos.lista, this.inter.raton].some((m) => this.inter.lleva(m) === this.cajaPedido.raiz);

@@ -38,7 +38,8 @@ Con **pinza** y sin rayos: todo con las manos.
 | Con controles | Gatillo (o gatillo lateral) = cerrar la pinza |
 | Computador (`?prueba`) | Arrastrar y hacer clic con el mouse, sin pantalla de entrada |
 
-Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Saltar tutorial**.
+Si aparece una rejilla azul alrededor, es el límite de seguridad del Quest (Guardian): sale al
+acercarse a su borde y la página no puede ocultarlo. Se evita configurando un límite más amplio.
 
 ## El juego
 
@@ -54,6 +55,7 @@ Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Salt
   oficina, sobre la mesa, otra mano de ejemplo muestra cómo se agarra con la pinza (o hasta que se
   agarra algo). Las manos reales se ven tal cual, con una línea blanca fina alrededor (como en el Quest).
 - **Pedidos por producto** (subcategoría): "2 higiene bucal", "1 agua"…; solo vale ese producto.
+- **Nunca sin tareas:** si no hay nada pendiente durante 6 s, llega una caja o un encargo pequeño.
 - **Rebotes:** lo dañado no entra a la estantería (rebota a la mesa: va a la caneca); con la fila
   llena (30) no entra nada más; la caja del pedido incompleta no entra al camión y vuelve a la mesa.
 - **Oclusión:** la mano real tapa lo virtual a ras: una mano invisible con las articulaciones y radios reales de WebXR;

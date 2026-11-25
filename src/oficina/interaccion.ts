@@ -61,6 +61,14 @@ export interface Agarrable {
    * que meter la pinza adentro, así no se agarran por error.
    */
   alcance?: number;
+  /**
+   * Prioridad del hover (por defecto 1). Si la pinza alcanza algo de mayor
+   * prioridad, lo de menor prioridad no se resalta ni se agarra: la caja
+   * abierta (2) le gana a la estantería (0).
+   */
+  prioridad?: number;
+  /** Prueba propia: ¿la pinza está dentro? (p. ej. bien adentro de un compartimiento). */
+  contiene?: (p: Vector3) => boolean;
 }
 
 /** Algo que se puede resaltar con un color (o apagar con null). */
@@ -245,10 +253,14 @@ export class Interaccion {
    */
   private masCercano(mano: Mano, factor = 1): Agarrable | null {
     let mejor: Agarrable | null = null;
+    let prio = -Infinity;
     let dist = Infinity;
     let vol = Infinity;
     for (const ag of this.agarrables) {
       if (!ag.activo() || !this.visible(ag.obj) || this.ocupado(ag)) {
+        continue;
+      }
+      if (ag.contiene && !ag.contiene(mano.agarre)) {
         continue;
       }
       this.caja.setFromObject(ag.obj);
@@ -256,10 +268,13 @@ export class Interaccion {
       if (d >= (ag.alcance ?? ALCANCE) * factor) {
         continue;
       }
+      const p = ag.prioridad ?? 1;
       this.caja.getSize(this.w);
       const v = this.w.x * this.w.y * this.w.z;
       const empate = Math.abs(d - dist) < 0.004;
-      if ((empate && v < vol) || (!empate && d < dist)) {
+      // Primero la prioridad; después lo más cercano; si empatan, lo más pequeño.
+      if (p > prio || (p === prio && ((empate && v < vol) || (!empate && d < dist)))) {
+        prio = p;
         dist = d;
         vol = v;
         mejor = ag;

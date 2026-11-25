@@ -82,6 +82,8 @@ export const HUELLA_REPISA = { centroZ: Z_REPISA + 0.016, ancho: ANCHO_REPISA + 
 /** Ángulos (grados, positivo a la izquierda) de los paneles alrededor de la persona. */
 export const ANGULO = { panel: 68, derecha: -58, mensajes: 104, resumen: 0 };
 const DISTANCIA_PANEL = 0.7;
+/** Grosor del tablero de la mesa virtual. */
+const GROSOR_MESA = 0.03;
 const BAJO_OJOS = (12.5 * Math.PI) / 180;
 const ESCALA_CAMION = 0.75;
 
@@ -118,6 +120,8 @@ export class Escena {
   alto = 0.9;
   /** Altura de los ojos sobre el piso medida al calibrar. */
   ojos = 1.55;
+  /** Patas de la mesa virtual (solo cuando no está sobre una mesa real). */
+  private readonly patas = new Group();
   /** Paneles que se ubican según la ergonomía (ángulo y distancia). */
   private ubicados = new Map<Object3D, { angulo: number; distancia: number }>();
 
@@ -246,15 +250,31 @@ export class Escena {
     f.grupo.position.x = ambos ? 0.125 : 0;
   }
 
-  /** Tableros flotantes con la madera de la estantería de la página. */
+  /**
+   * Tableros con la madera de la estantería de la página. Sobre una mesa real
+   * se apoyan en ella; si no hay, se apoyan en el piso con patas.
+   */
   private armarMesas(): void {
     const tablero = new MeshStandardMaterial({ color: '#C98F62', emissive: '#3A1F0E', roughness: 0.9 });
     const canto = new MeshStandardMaterial({ color: '#B87048', emissive: '#4E2A14', roughness: 0.9 });
+    // Patas: cilindros de 1 m que se estiran hasta el piso (ver ajustarErgonomia).
+    const geoPata = new CylinderGeometry(0.018, 0.018, 1, 12);
     for (const [x0, x1, z0, z1] of MESAS) {
-      const t = new Mesh(new BoxGeometry(x1 - x0, 0.03, z1 - z0), [canto, canto, tablero, canto, canto, canto]);
-      t.position.set((x0 + x1) / 2, -0.015, (z0 + z1) / 2);
+      const t = new Mesh(new BoxGeometry(x1 - x0, GROSOR_MESA, z1 - z0), [canto, canto, tablero, canto, canto, canto]);
+      t.position.set((x0 + x1) / 2, -GROSOR_MESA / 2, (z0 + z1) / 2);
       this.sobre.add(t);
+      for (const [px, pz] of [
+        [x0 + 0.04, z0 + 0.04],
+        [x1 - 0.04, z0 + 0.04],
+        [x0 + 0.04, z1 - 0.04],
+        [x1 - 0.04, z1 - 0.04],
+      ]) {
+        const pata = new Mesh(geoPata, canto);
+        pata.position.set(px, -0.5, pz);
+        this.patas.add(pata);
+      }
     }
+    this.sobre.add(this.patas);
   }
 
   /** Pone un panel a `angulo` grados (positivo a la izquierda), a la altura de la vista. */
@@ -292,9 +312,20 @@ export class Escena {
     this.ojos = Math.min(2.05, Math.max(1.0, ojos));
     const estatura = this.ojos / 0.93;
     // Mesa: sobre la superficie real si la hay; si no, a la altura del codo menos 7,5 cm.
+    // Sobre una mesa real, el tablero virtual queda APOYADO encima (su cara de
+    // abajo toca la mesa real), no hundido en ella.
     this.alto =
-      mesaReal !== null ? Math.min(1.3, Math.max(0.35, mesaReal)) : Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
+      mesaReal !== null
+        ? Math.min(1.3, Math.max(0.35, mesaReal)) + GROSOR_MESA
+        : Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
     this.sobre.position.y = this.alto;
+    // Sin mesa real, la mesa virtual se apoya en el piso con sus patas.
+    const largoPata = Math.max(0.05, this.alto - GROSOR_MESA);
+    this.patas.visible = mesaReal === null;
+    for (const pata of this.patas.children) {
+      pata.scale.y = largoPata;
+      pata.position.y = -GROSOR_MESA - largoPata / 2;
+    }
     // Estantería: la fila de arriba queda bajo la línea de los ojos. Se achica
     // solo un poco si hace falta, para que los productos se vean grandes.
     const techo = Math.min(this.ojos - 0.1, 0.9 * estatura);

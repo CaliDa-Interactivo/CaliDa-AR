@@ -444,13 +444,42 @@ export class Interaccion {
         }
         if (entra > 0.006 && !set.has(mano)) {
           set.add(mano);
-          this.presionar(boton, mano);
+          // Durante la pausa (botones recién cambiados) no cuenta: hay que sacar
+          // el dedo y volver a empujar.
+          if (this.tiempo >= this.pausaHasta) {
+            this.presionar(boton, mano);
+          }
         } else if (entra < -0.012) {
           set.delete(mano);
         }
       }
       boton.hundir(hundido);
       boton.pintar(this.tiempo);
+    }
+  }
+
+  /** Hasta cuándo no cuentan los empujones (cuando cambian los botones en el mismo lugar). */
+  private pausaHasta = 0;
+
+  /**
+   * Pausa los botones un momento: así el mismo empujón no "pasa" a un botón
+   * nuevo que aparece donde estaba el dedo (p. ej. Finalizar → Volver al
+   * inicio → Colocar aquí).
+   */
+  pausarBotones(segundos = 1): void {
+    this.pausaHasta = this.tiempo + segundos;
+    // Los dedos que ya estaban adentro tienen que salir y volver a entrar.
+    for (const boton of this.botones) {
+      let set = this.dentro.get(boton);
+      if (!set) {
+        set = new Set();
+        this.dentro.set(boton, set);
+      }
+      for (const mano of this.manos.lista) {
+        if (mano.presente) {
+          set.add(mano);
+        }
+      }
     }
   }
 

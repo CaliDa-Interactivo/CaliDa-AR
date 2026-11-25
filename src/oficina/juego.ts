@@ -120,6 +120,9 @@ function crearVistaPrevia(): Group {
   return g;
 }
 
+/** Altura (coordenadas de la caja) justo encima del relleno de papel: ahí se apoyan los objetos de adentro. */
+const ENCIMA_RELLENO = 0.05;
+
 /** Escala de la caja del pedido adentro del furgón (para que quepa por la puerta). */
 const ESCALA_CAJA_CAMION = 0.6;
 
@@ -335,6 +338,8 @@ export class OficinaSystem extends createSystem({}) {
 
   /** Pone el botón y el gato frente a la persona. */
   protected mostrarInicio(): void {
+    // "Colocar aquí" aparece donde pudo estar el dedo: pausa para no colocar sin querer.
+    this.inter?.pausarBotones(1.2);
     this.leerCabeza();
     const raiz = this.escena.raiz;
     raiz.position.set(this.cabeza.x, this.pisoY(), this.cabeza.z);
@@ -788,7 +793,8 @@ export class OficinaSystem extends createSystem({}) {
     caja.minis.forEach((m) => m.removeFromParent());
     caja.minis = caja.objetos.slice(0, 4).map((o, i) => {
       const mini = new Objeto(o.cat, false, o.sub).grupo;
-      mini.position.set(-0.07 + (i % 2) * 0.12, 0.012, -0.04 + Math.floor(i / 2) * 0.08);
+      // Encima del relleno de papel de la caja (arriba a 4,8 cm), sin atravesar nada.
+      mini.position.set(-0.07 + (i % 2) * 0.12, ENCIMA_RELLENO, -0.04 + Math.floor(i / 2) * 0.08);
       mini.scale.setScalar(1.25);
       caja.grupo.add(mini);
       return mini;
@@ -1259,7 +1265,7 @@ export class OficinaSystem extends createSystem({}) {
             c.visible = false;
           }
         });
-        mini.position.set(-0.08 + (n % 4) * 0.055, 0.012 + Math.floor(n / 8) * 0.04, -0.045 + (Math.floor(n / 4) % 2) * 0.08);
+        mini.position.set(-0.08 + (n % 4) * 0.055, ENCIMA_RELLENO + Math.floor(n / 8) * 0.04, -0.045 + (Math.floor(n / 4) % 2) * 0.08);
         mini.scale.setScalar(1.1);
         this.cajaPedido.raiz.add(mini);
         this.minisPedido.push(mini);
@@ -1448,6 +1454,7 @@ export class OficinaSystem extends createSystem({}) {
       }
     };
     e.siguiente.alPresionar = () => {
+      this.inter.pausarBotones();
       if (this.fase === 'resumen' && this.dia < JORNADAS.length - 1) {
         this.dia++;
         this.empezarJornada();
@@ -1456,6 +1463,7 @@ export class OficinaSystem extends createSystem({}) {
       }
     };
     e.finalizar.alPresionar = () => {
+      this.inter.pausarBotones();
       if (this.fase === 'resumen') {
         this.verSemana();
       }

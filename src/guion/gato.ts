@@ -252,7 +252,7 @@ export class Gato {
       const dz = persona.z - gato.position.z;
       const largo = Math.hypot(dx, dz) || 1;
       const escala = gato.scale.x;
-      const lado = 0.3 + 0.08 * escala;
+      const lado = 0.28 + 0.06 * escala;
       panel.position.set(
         gato.position.x + (dz / largo) * lado,
         gato.position.y + ALTO_GATO * escala * 0.7,

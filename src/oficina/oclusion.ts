@@ -240,6 +240,8 @@ export interface OpcionesPiezas {
   material: Material;
   /** Lo que se suma al radio real (m). */
   margen: number;
+  /** Factor del radio real (por defecto 1). La mano invisible usa un poco menos: sin halo. */
+  escalaRadio?: number;
   orden: number;
   /** Rellenar la palma (para tapar). */
   palma: boolean;
@@ -262,8 +264,9 @@ export class PiezasMano {
   private arriba = new Vector3(0, 1, 0);
 
   constructor(private op: OpcionesPiezas) {
-    this.esferas = new InstancedMesh(new SphereGeometry(1, 14, 10), op.material, N_ART * 2);
-    this.capsulas = new InstancedMesh(new CylinderGeometry(1, 1, 1, 12, 1, true), op.material, HUESOS.length * 2);
+    // Muchos segmentos: el borde de los dedos se ve redondo, no en rectas.
+    this.esferas = new InstancedMesh(new SphereGeometry(1, 24, 16), op.material, N_ART * 2);
+    this.capsulas = new InstancedMesh(new CylinderGeometry(1, 1, 1, 24, 1, true), op.material, HUESOS.length * 2);
     for (const malla of [this.esferas, this.capsulas]) {
       malla.renderOrder = op.orden;
       malla.frustumCulled = false;
@@ -290,6 +293,7 @@ export class PiezasMano {
     let nE = 0;
     let nC = 0;
     const margen = this.op.margen;
+    const f = this.op.escalaRadio ?? 1;
     manos.forEach((mano, k) => {
       const palma = this.palmas[k];
       if (!mano) {
@@ -304,7 +308,7 @@ export class PiezasMano {
         if (this.op.contorno && SIN_CONTORNO.has(i)) {
           continue;
         }
-        const radio = radioSeguro(r[i]) + margen;
+        const radio = radioSeguro(r[i]) * f + margen;
         this.m.makeScale(radio, radio, radio).setPosition(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
         this.esferas.setMatrixAt(nE++, this.m);
       }
@@ -319,7 +323,7 @@ export class PiezasMano {
         if (largo < 1e-4) {
           continue;
         }
-        const radio = Math.min(radioSeguro(r[i]), radioSeguro(r[j])) + margen;
+        const radio = Math.min(radioSeguro(r[i]), radioSeguro(r[j])) * f + margen;
         this.q.setFromUnitVectors(this.arriba, this.d.multiplyScalar(1 / largo));
         this.s.set(radio, largo, radio);
         this.a.add(this.b).multiplyScalar(0.5);
@@ -357,10 +361,11 @@ export const MATERIAL_LINEA = new MeshBasicMaterial({
 /** Grosor de la línea blanca (m). */
 export const GROSOR_LINEA = 0.0022;
 
-/** Tramos del antebrazo desde la muñeca: [largo hasta el final del tramo (m), radio relativo]. */
+/** Tramos del antebrazo desde la muñeca: [largo hasta el final del tramo (m), radio (m)] (un antebrazo real). */
 const ANTEBRAZO: [number, number][] = [
-  [0.11, 1.15],
-  [0.27, 1.45],
+  [0.06, 0.029],
+  [0.16, 0.034],
+  [0.3, 0.037],
 ];
 
 /**
@@ -370,7 +375,7 @@ const ANTEBRAZO: [number, number][] = [
  */
 export class OclusorManos {
   readonly grupo = new Group();
-  private tapa = new PiezasMano({ material: MATERIAL_TAPA, margen: 0, orden: -10, palma: true, contorno: false });
+  private tapa = new PiezasMano({ material: MATERIAL_TAPA, margen: 0, escalaRadio: 0.92, orden: -10, palma: true, contorno: false });
   private datos: (DatosMano | null)[] = [null, null];
   private brazoCil: InstancedMesh;
   private brazoEsf: InstancedMesh;
@@ -385,8 +390,8 @@ export class OclusorManos {
   private arriba = new Vector3(0, 1, 0);
 
   constructor() {
-    this.brazoCil = new InstancedMesh(new CylinderGeometry(1, 1, 1, 14, 1, true), MATERIAL_TAPA, ANTEBRAZO.length * 2);
-    this.brazoEsf = new InstancedMesh(new SphereGeometry(1, 14, 10), MATERIAL_TAPA, ANTEBRAZO.length * 2);
+    this.brazoCil = new InstancedMesh(new CylinderGeometry(1, 1, 1, 24, 1, true), MATERIAL_TAPA, ANTEBRAZO.length * 2);
+    this.brazoEsf = new InstancedMesh(new SphereGeometry(1, 24, 16), MATERIAL_TAPA, ANTEBRAZO.length * 2);
     for (const malla of [this.brazoCil, this.brazoEsf]) {
       malla.renderOrder = -10;
       malla.frustumCulled = false;
@@ -412,10 +417,8 @@ export class OclusorManos {
       if (this.d.dot(this.e) < 0) {
         this.d.negate();
       }
-      const base = radioSeguro(mano.radios[0]);
       let desde = 0;
-      for (const [hasta, rel] of ANTEBRAZO) {
-        const radio = Math.max(0.02, base) * rel;
+      for (const [hasta, radio] of ANTEBRAZO) {
         this.a.set(p[0], p[1], p[2]).addScaledVector(this.d, desde);
         this.b.set(p[0], p[1], p[2]).addScaledVector(this.d, hasta);
         this.q.setFromUnitVectors(this.arriba, this.d);

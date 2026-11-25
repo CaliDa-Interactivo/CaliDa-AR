@@ -61,15 +61,15 @@ export const ESCALA_CAJA = 0.7;
 /** El gato encima de la estantería, un poco más pequeño. */
 export const ESCALA_GATO = 0.7;
 export const ALTO_CAJA = 0.14 * ESCALA_CAJA;
-const CAMION = new Vector3(0.66, 0, -0.5);
-const BOTON_DESPACHO = new Vector3(0.64, 0, -0.1);
+const CAMION = new Vector3(0.66, 0, -0.53);
+const BOTON_DESPACHO = new Vector3(0.67, 0, -0.13);
 /** Estantería: lo más cerca posible sin tapar la zona de trabajo. */
 const Z_REPISA = -0.62;
 /**
  * El gato (y su reloj) van hacia la izquierda de la estantería: su globo, a
  * la derecha, queda encima de la estantería y alineado con ella.
  */
-const X_GATO = -0.27;
+const X_GATO = -0.17;
 /**
  * Huella de la estantería sobre la mesa (coordenadas de la oficina, sin
  * achicar): es lo que debe quedar sobre una superficie real al colocarla.
@@ -176,14 +176,17 @@ export class Escena {
     this.camion.position.copy(CAMION);
     this.camion.rotation.y = Math.PI / 2;
     this.sobre.add(this.camion);
-    this.pedestal = new Mesh(new BoxGeometry(0.17, 0.05, 0.11), mate(COLOR.carbon));
-    this.pedestal.position.set(BOTON_DESPACHO.x, 0.025, BOTON_DESPACHO.z);
+    // Base del botón: una placa baja y horizontal, girada hacia la persona
+    // (como el botón) y completa sobre la mesa.
+    this.pedestal = new Mesh(new BoxGeometry(0.16, 0.026, 0.09), mate(COLOR.carbon));
+    this.pedestal.position.set(BOTON_DESPACHO.x, 0.013, BOTON_DESPACHO.z);
+    mirarAlCentro(this.pedestal);
     this.sobre.add(this.pedestal);
-    this.botonDespacho.grupo.position.set(BOTON_DESPACHO.x, 0.055, BOTON_DESPACHO.z);
+    this.botonDespacho.grupo.position.set(BOTON_DESPACHO.x, 0.034, BOTON_DESPACHO.z);
     mirarAlCentro(this.botonDespacho.grupo);
-    this.botonDespacho.grupo.rotation.x = -1.05;
+    this.botonDespacho.grupo.rotation.x = -1.2;
     this.sobre.add(this.botonDespacho.grupo);
-    this.letreroDespacho.malla.position.set(BOTON_DESPACHO.x, 0.16, BOTON_DESPACHO.z - 0.02);
+    this.letreroDespacho.malla.position.set(BOTON_DESPACHO.x, 0.13, BOTON_DESPACHO.z - 0.04);
     mirarAlCentro(this.letreroDespacho.malla);
     this.sobre.add(this.letreroDespacho.malla);
 

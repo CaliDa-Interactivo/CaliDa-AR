@@ -676,11 +676,13 @@ export class MultiSystem extends OficinaSystem {
   protected conectarBotones(): void {
     super.conectarBotones();
     this.escena.siguiente.alPresionar = () => {
+      this.inter.pausarBotones();
       if ((this.fase === 'resumen' && this.dia < JORNADAS.length - 1) || this.fase === 'semana') {
         this.op({ tipo: 'siguiente' });
       }
     };
     this.escena.finalizar.alPresionar = () => {
+      this.inter.pausarBotones();
       if (this.fase === 'resumen') {
         this.op({ tipo: 'finalizar' });
       }

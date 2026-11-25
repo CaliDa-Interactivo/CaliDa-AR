@@ -54,6 +54,8 @@ Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Salt
   oficina, sobre la mesa, otra mano de ejemplo muestra cómo se agarra con la pinza (o hasta que se
   agarra algo). Las manos reales se ven tal cual, con una línea blanca fina alrededor (como en el Quest).
 - **Pedidos por producto** (subcategoría): "2 higiene bucal", "1 agua"…; solo vale ese producto.
+- **Rebotes:** lo dañado no entra a la estantería (rebota a la mesa: va a la caneca); con la fila
+  llena (30) no entra nada más; la caja del pedido incompleta no entra al camión y vuelve a la mesa.
 - **Oclusión:** la mano real tapa lo virtual a ras: una mano invisible con las articulaciones y radios reales de WebXR;
   la malla genérica de la mano no se dibuja, así los objetos no cambian de color ni de forma.
 - **Flujo:** campana → aviso → llegan cajas → quitar la tapa → revisar cada objeto a mano (contorno
@@ -115,7 +117,9 @@ reales que da WebXR (`OclusorManos` en `oclusion.ts`). Parámetros de prueba en 
 y `?sinoclusormano` (sin la mano invisible).
 
 Modo prueba con el mouse: `?prueba` (un jugador), `?prueba&multi=crear&rol=despachador` y
-`?prueba&multi=unir&sala=CÓDIGO`. Para el multijugador usa **dos ventanas lado a lado** (no pestañas:
+`?prueba&multi=unir&sala=CÓDIGO`. Si el multijugador no conecta en una red de universidad u oficina (aíslan los dispositivos o
+bloquean WebRTC), conecten las dos gafas al hotspot de un celular. Para probar en el computador
+usa **dos ventanas lado a lado** (no pestañas:
 la de atrás se congela).
 
 Simplificar un modelo pesado:

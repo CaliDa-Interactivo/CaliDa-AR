@@ -574,7 +574,7 @@ export class OficinaSystem extends createSystem({}) {
     this.escena.camion.position.copy(this.baseCamion);
     this.escena.camion.scale.setScalar(0.75);
     this.escena.panel.verAvisos();
-    this.escena.resumen.visible = false;
+    this.escena.mostrarResumen(false);
     this.escena.flecha.visible = false;
   }
 
@@ -931,8 +931,21 @@ export class OficinaSystem extends createSystem({}) {
       obj: this.cajaPedido.raiz,
       activo: () => this.fase === 'jornada' && !this.cajaEnCamion && this.camion === 'listo' && !!this.enCurso(),
       tomar: () => this.cajaPedido.raiz,
-      destino: (obj) => (this.cercaDelCamion(obj) ? 'valido' : null),
+      // Verde si está completa; roja si le falta algo (no entra al camión).
+      destino: (obj) => (this.cercaDelCamion(obj) ? (this.pedidoCompleto() ? 'valido' : 'invalido') : null),
       soltar: (obj) => {
+        if (this.cercaDelCamion(obj) && !this.pedidoCompleto()) {
+          // Incompleta: rebota y vuelve a su lugar en la mesa.
+          sonidos.error();
+          const p = this.enCurso();
+          const falta = p ? faltantes(p, nombreProducto) : [];
+          this.gato.decir(falta.length ? `Todavía falta: ${falta.join(', ')}. La caja vuelve a la mesa.` : 'Primero acepta un pedido.');
+          this.v.copy(obj.position).setY(obj.position.y + 0.12);
+          this.anim.mover(obj, this.v.clone(), 0.18, {
+            fin: () => this.anim.mover(obj, PEDIDO.clone(), 0.45, { arco: 0.1 }),
+          });
+          return;
+        }
         if (this.cercaDelCamion(obj)) {
           this.cajaEnCamion = true;
           this.cargando = true;
@@ -959,6 +972,12 @@ export class OficinaSystem extends createSystem({}) {
       },
     };
     this.inter.agarrables.push(pedido);
+  }
+
+  /** ¿El pedido en curso ya tiene todo? */
+  protected pedidoCompleto(): boolean {
+    const p = this.enCurso();
+    return !!p && completo(p);
   }
 
   /** ¿La caja del pedido está en la puerta trasera del camión? */
@@ -990,7 +1009,8 @@ export class OficinaSystem extends createSystem({}) {
       const k = e.repisa.categoriaEn(e.repisa.grupo.worldToLocal(e.sobre.localToWorld(this.v.copy(p))));
       if (k >= 0) {
         marca = k;
-        resultado = k === indiceCategoria(oj.o.cat) && !e.repisa.lleno(k) ? 'valido' : 'invalido';
+        // Rojo si no es su fila, si la fila está llena o si está dañado (no entra).
+        resultado = k === indiceCategoria(oj.o.cat) && !e.repisa.lleno(k) && !oj.o.danado ? 'valido' : 'invalido';
       }
     }
     if (marca !== this.zonaMarcada) {
@@ -1034,6 +1054,15 @@ export class OficinaSystem extends createSystem({}) {
         sonidos.error();
         this.gato.decir(`${nombre(oj.o.cat)} no va en ${CATEGORIAS[k].corto}: va en su propia fila.`);
         this.devolver(oj);
+      } else if (oj.o.danado) {
+        // Lo dañado no entra a la estantería: rebota a la mesa.
+        if (oj.origen === 'caja') {
+          this.cuenta.errores++;
+          this.cuenta.puntos -= 5;
+        }
+        this.gato.animar('triste', 2, this.tiempo);
+        this.gato.decir('Eso está dañado (contorno rojo): no entra a la estantería. Llévalo a la caneca de descarte.');
+        this.rebotar(oj);
       } else {
         this.aRepisa(oj);
       }
@@ -1045,6 +1074,14 @@ export class OficinaSystem extends createSystem({}) {
         this.devolver(oj);
       }
     });
+  }
+
+  /** Rebota a la mesa, junto a la caja de trabajo (sigue en juego: se puede volver a agarrar). */
+  protected rebotar(oj: ObjetoJuego): void {
+    sonidos.error();
+    oj.o.contorno.poner(COLOR.rojo);
+    const casa = new Vector3(TRABAJO.x + 0.17, 0, TRABAJO.z + 0.03);
+    this.anim.mover(oj.o.grupo, casa, 0.5, { arco: 0.14, fin: () => oj.o.reposo() });
   }
 
   /** Rebota: lo que salió de la repisa vuelve a ella; lo de la caja, junto a la caja. */
@@ -1136,11 +1173,18 @@ export class OficinaSystem extends createSystem({}) {
       this.cuenta.rechazadas++;
     }
     this.escena.panel.avisar(`Categoría llena: no se puede recibir (${nombre(oj.o.cat)})`, this.tiempo);
-    this.gato.decir(`La fila de ${nombre(oj.o.cat).toLowerCase()} ya tiene 30. No se puede recibir: la donación se va.`);
+    this.gato.decir(`La fila de ${nombre(oj.o.cat).toLowerCase()} ya tiene 30: no entra más. La donación se rechaza.`);
     this.vistas.add('lleno');
+    // Rebota fuera de la estantería (no entra) y después se va.
     const g = oj.o.grupo;
-    this.v.copy(g.position).setY(g.position.y + 0.25);
-    this.anim.mover(g, this.v.clone(), 0.8, { escala: 0.02, fin: () => this.quitarObjeto(oj) });
+    const fuera = new Vector3(TRABAJO.x + 0.17, 0, TRABAJO.z + 0.03);
+    this.anim.mover(g, fuera, 0.5, {
+      arco: 0.14,
+      fin: () => {
+        this.v.copy(g.position).setY(g.position.y + 0.2);
+        this.anim.mover(g, this.v.clone(), 0.7, { escala: 0.02, fin: () => this.quitarObjeto(oj) });
+      },
+    });
   }
 
   // ---- Pedido: caja, camión y despacho ------------------------------
@@ -1512,7 +1556,7 @@ export class OficinaSystem extends createSystem({}) {
     sonidos.fin();
     this.escena.flecha.visible = false;
     this.pintarResumenDia();
-    this.escena.resumen.visible = true;
+    this.escena.mostrarResumen(true);
     this.escena.botonesResumen(this.modoResumen());
     this.gato.animar('aplaudir', 2.5, this.tiempo);
     this.gato.decir(`¡Terminó el ${DIAS[this.dia].toLowerCase()}! Mira cómo te fue.`);
@@ -1609,7 +1653,7 @@ export class OficinaSystem extends createSystem({}) {
     lineas(ctx, MENSAJE_FINAL, l.ancho - 180).forEach((t, i) => ctx.fillText(t, l.ancho / 2, 570 + i * 44));
     l.listo();
     this.escena.botonesResumen('total');
-    this.escena.resumen.visible = true;
+    this.escena.mostrarResumen(true);
     sonidos.logro();
     // El gato se queda en su puesto, a un lado del tablero.
     this.anim.mover(this.gato.objeto, this.escena.puestoGato(this.v).clone(), 0.7, { arco: 0.12, escala: ESCALA_GATO });
@@ -1711,9 +1755,9 @@ export class OficinaSystem extends createSystem({}) {
     }
     this.avanzarPedidos(dt);
     this.moverCamion(dt);
-    // Puertas traseras: se abren mientras se lleva la caja del pedido o mientras entra.
+    // Puertas traseras: se abren mientras se lleva la caja COMPLETA o mientras entra.
     const conCaja = [...this.manos.lista, this.inter.raton].some((m) => this.inter.lleva(m) === this.cajaPedido.raiz);
-    this.escena.puertasCamion(this.camion === 'listo' && (conCaja || this.cargando), dt);
+    this.escena.puertasCamion(this.camion === 'listo' && ((conCaja && this.pedidoCompleto()) || this.cargando), dt);
     // ¿Terminó la jornada?
     const eventos = JORNADAS[this.dia].eventos;
     const sinNada =

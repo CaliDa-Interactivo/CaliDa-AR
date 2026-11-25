@@ -12,7 +12,15 @@
 //
 // PeerJS usa su servidor público de señalización (0.peerjs.com) solo
 // para que los dos dispositivos se encuentren; los datos del juego
-// van directo entre ellos. No se envían datos personales reales.
+// van directo entre ellos (WebRTC). No se envían datos personales reales.
+//
+// Fallas típicas y qué se le dice a la persona:
+//  · No responde el servidor de salas (sin internet o 0.peerjs.com caído).
+//  · Se encuentran, pero la red no deja conectar directo (redes de
+//    universidad u oficina que aíslan los dispositivos o bloquean UDP):
+//    la conexión ICE falla. Solución práctica: los dos en la misma red
+//    sin aislamiento, p. ej. el hotspot de un celular.
+//  · Nada responde en 20 s: se avisa en vez de quedarse "conectando".
 // ============================================================
 import Peer, { type DataConnection } from 'peerjs';
 
@@ -25,6 +33,12 @@ export interface Mensaje {
 }
 
 const PREFIJO = 'calida-ra-sala-';
+/** Segundos para conectarse antes de avisar que algo falla. */
+const ESPERA_CONEXION = 20;
+
+/** Mensaje cuando la red no deja que las gafas se conecten directo. */
+export const MENSAJE_RED_BLOQUEADA =
+  'Las gafas se encontraron, pero esta red no deja que se conecten entre ellas (pasa en redes de universidad u oficina). Conecten las dos gafas al hotspot de un celular y vuelvan a intentar.';
 
 export const rolContrario = (r: Rol): Rol => (r === 'receptor' ? 'despachador' : 'receptor');
 
@@ -74,7 +88,7 @@ export class Red {
             peer.destroy();
             intentar(vueltas + 1); // código ocupado: otro
           } else if (!this.peer) {
-            rechazar(new Error(`No se pudo crear la sala (${e.type ?? 'error'})`));
+            rechazar(new Error(explicarError(e.type)));
           }
         });
       };
@@ -86,6 +100,7 @@ export class Red {
     // Solo un invitado a la vez: la conexión nueva reemplaza a la vieja.
     this.conexion?.close();
     this.conexion = c;
+    this.vigilarRed(c);
     c.on('open', () => {
       this.fijar('conectado');
       this.enviar({ type: 'rol', payload: rolContrario(this.rol) });
@@ -107,23 +122,43 @@ export class Red {
       const peer = new Peer();
       this.peer = peer;
       let resuelto = false;
-      peer.on('open', () => this.conectarA(codigo, (rol) => {
+      let servidor = false;
+      // Si nada responde a tiempo, se dice en qué paso se quedó.
+      const limite = setTimeout(() => {
         if (!resuelto) {
           resuelto = true;
-          resolver(rol);
+          rechazar(
+            new Error(
+              servidor
+                ? MENSAJE_RED_BLOQUEADA
+                : 'No responde el servidor de salas. Revisen que las gafas tengan internet y vuelvan a intentar.',
+            ),
+          );
         }
-      }));
+      }, ESPERA_CONEXION * 1000);
+      peer.on('open', () => {
+        servidor = true;
+        this.conectarA(codigo, (rol) => {
+          if (!resuelto) {
+            resuelto = true;
+            clearTimeout(limite);
+            resolver(rol);
+          }
+        });
+      });
       peer.on('error', (e: { type?: string }) => {
         if (e.type === 'peer-unavailable') {
           if (!resuelto) {
             resuelto = true;
-            rechazar(new Error('No existe una sala con ese código.'));
+            clearTimeout(limite);
+            rechazar(new Error('No existe una sala con ese código (revisen el código o que la otra persona siga en la pantalla de la sala).'));
           } else {
             this.reintentar();
           }
         } else if (!resuelto) {
           resuelto = true;
-          rechazar(new Error(`No se pudo conectar (${e.type ?? 'error'})`));
+          clearTimeout(limite);
+          rechazar(new Error(explicarError(e.type)));
         }
       });
     });
@@ -136,6 +171,7 @@ export class Red {
     this.fijar(this.estado === 'desconectado' ? 'conectando' : 'reconectando');
     const c = this.peer.connect(PREFIJO + codigo, { reliable: true });
     this.conexion = c;
+    this.vigilarRed(c);
     c.on('open', () => {
       this.reintento = 0;
       this.fijar('conectado');
@@ -170,6 +206,19 @@ export class Red {
     }, Math.min(8000, 1500 * this.reintento));
   }
 
+  /** Avisa si la red no deja conectar directo (ICE falló). */
+  private vigilarRed(c: DataConnection): void {
+    const pc = (c as unknown as { peerConnection?: RTCPeerConnection }).peerConnection;
+    if (!pc) {
+      return;
+    }
+    pc.addEventListener('iceconnectionstatechange', () => {
+      if (pc.iceConnectionState === 'failed' && this.conexion === c) {
+        this.fijar(this.anfitrion ? 'esperando' : 'reconectando', MENSAJE_RED_BLOQUEADA);
+      }
+    });
+  }
+
   enviar(m: Mensaje): void {
     if (this.conexion?.open) {
       this.conexion.send(m);
@@ -182,5 +231,23 @@ export class Red {
     this.peer = null;
     this.conexion = null;
     this.fijar('desconectado');
+  }
+}
+
+/** Explica en palabras un error de PeerJS. */
+function explicarError(tipo?: string): string {
+  switch (tipo) {
+    case 'network':
+    case 'server-error':
+    case 'socket-error':
+    case 'socket-closed':
+      return 'No responde el servidor de salas. Revisen que las gafas tengan internet y vuelvan a intentar.';
+    case 'webrtc':
+    case 'negotiation-failed':
+      return MENSAJE_RED_BLOQUEADA;
+    case 'browser-incompatible':
+      return 'Este navegador no permite el multijugador (WebRTC).';
+    default:
+      return `No se pudo conectar (${tipo ?? 'error'}). Vuelvan a intentar.`;
   }
 }

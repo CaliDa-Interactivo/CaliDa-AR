@@ -99,7 +99,7 @@ const MATERIAL_LIMPIADOR = new MeshBasicMaterial({ colorWrite: false, depthWrite
 const GEOMETRIA_LIMPIADOR = new PlaneGeometry(0.001, 0.001);
 
 /** Malla mínima que borra la profundidad justo antes de dibujar lo que se lleva. */
-function crearLimpiador(): Mesh {
+export function crearLimpiador(): Mesh {
   const m = new Mesh(GEOMETRIA_LIMPIADOR, MATERIAL_LIMPIADOR);
   m.renderOrder = 999;
   m.frustumCulled = false;

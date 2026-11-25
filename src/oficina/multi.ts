@@ -374,7 +374,7 @@ export class MultiSystem extends OficinaSystem {
     this.fase = 'resumen';
     this.resumenPintado = -1;
     sonidos.fin();
-    this.escena.resumen.visible = true;
+    this.escena.mostrarResumen(true);
     this.escena.botonesResumen(this.modoResumen());
     const l = this.escena.lienzoResumen;
     l.limpiar();

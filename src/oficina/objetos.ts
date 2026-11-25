@@ -127,6 +127,11 @@ function calcomania(sub: string, caja: Box3): Parte | null {
   };
 }
 
+/** Giros propios de algunos productos: el martillo acostado de lado (apoyado, se ve de perfil). */
+const GIRO_PRODUCTO: Record<string, () => Matrix4> = {
+  'construccion-herramientas': () => new Matrix4().makeRotationZ(Math.PI / 2),
+};
+
 /**
  * Partes de un producto de la página: cada malla con su material mate,
  * escalada a una caja de ancho × alto y apoyada en y = 0 (centrada en x/z).
@@ -140,7 +145,16 @@ function partesDeModelo(p: Producto): Parte[] {
   }
   const raiz = gltf.scene;
   raiz.updateMatrixWorld(true);
-  const caja = new Box3().setFromObject(raiz, true);
+  // Giro propio del producto (p. ej. el martillo acostado) antes de medirlo.
+  const giro = GIRO_PRODUCTO[p.id]?.() ?? new Matrix4();
+  const caja = new Box3();
+  raiz.traverse((o) => {
+    const m = o as Mesh;
+    if (m.isMesh) {
+      m.geometry.computeBoundingBox();
+      caja.union(m.geometry.boundingBox!.clone().applyMatrix4(new Matrix4().multiplyMatrices(giro, m.matrixWorld)));
+    }
+  });
   const tam = caja.getSize(new Vector3());
   const escala = Math.min(ancho / tam.x, alto / tam.y, ancho / tam.z);
   const centro = caja.getCenter(new Vector3());
@@ -155,14 +169,11 @@ function partesDeModelo(p: Producto): Parte[] {
     if (!m.isMesh) {
       return;
     }
-    const geometria = m.geometry.clone().applyMatrix4(new Matrix4().multiplyMatrices(ajuste, m.matrixWorld));
+    const geometria = m.geometry
+      .clone()
+      .applyMatrix4(new Matrix4().multiplyMatrices(ajuste, new Matrix4().multiplyMatrices(giro, m.matrixWorld)));
     const original = m.material as MeshStandardMaterial;
-    // El cepillo de dientes se gira para que se vean los dos (como la página).
-    if (p.id === 'aseo-bucal' && original.map) {
-      geometria.computeBoundingBox();
-      const c = geometria.boundingBox!.getCenter(new Vector3());
-      geometria.translate(-c.x, -c.y, -c.z).rotateZ(Math.PI / 2).translate(c.x, c.y, c.z);
-    }
+    // Los cepillos de dientes quedan verticales, como vienen en el modelo.
     const material = mate(colores[original.name] ?? `#${(original.color ?? new Color('#cccccc')).getHexString()}`);
     material.name = original.name;
     if (original.map) {

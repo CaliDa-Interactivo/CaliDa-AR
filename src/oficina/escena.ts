@@ -37,6 +37,8 @@ import { COLOR } from './datos.js';
 import { ALTO_PANEL, ANCHO_PANEL, Panel } from './panel.js';
 import { ALTO_REPISA, ANCHO_REPISA, Repisa } from './repisa.js';
 import { BOTON, Boton3D, Lienzo } from './ui.js';
+import { crearLimpiador } from './interaccion.js';
+import { ponerEncima } from './oclusion.js';
 
 const mate = (color: string) => new MeshStandardMaterial({ color, roughness: 0.88 });
 
@@ -47,8 +49,9 @@ const MESAS: [number, number, number, number][] = [
   [0.55, 0.9, -0.75, -0.05], // derecha
 ];
 
-export const PILA = [new Vector3(-0.27, 0, -0.36), new Vector3(-0.08, 0, -0.36)];
-export const TRABAJO = new Vector3(0.1, 0, -0.41);
+export const PILA = [new Vector3(-0.38, 0, -0.34), new Vector3(-0.2, 0, -0.34)];
+/** La caja que se está desocupando: al centro, frente a la persona y cerca del borde de la mesa. */
+export const TRABAJO = new Vector3(0, 0, -0.33);
 export const PEDIDO = new Vector3(0.4, 0, -0.41);
 /** Caneca de descarte: junto a la esquina delantera izquierda (abajo) de la estantería. */
 export const CANECA = new Vector3(-0.45, 0, -0.47);
@@ -193,6 +196,23 @@ export class Escena {
     this.flecha.rotation.x = Math.PI;
     this.flecha.visible = false;
     this.sobre.add(this.flecha);
+  }
+
+  private quitarEncima: (() => void) | null = null;
+
+  /**
+   * Muestra u oculta el resumen (día o semana). Se dibuja por encima de todo
+   * (se borra la profundidad justo antes), así la estantería nunca lo atraviesa
+   * aunque la oficina haya quedado cerca de la persona.
+   */
+  mostrarResumen(visible: boolean): void {
+    this.resumen.visible = visible;
+    if (visible && !this.quitarEncima) {
+      this.quitarEncima = ponerEncima(this.resumen, crearLimpiador());
+    } else if (!visible && this.quitarEncima) {
+      this.quitarEncima();
+      this.quitarEncima = null;
+    }
   }
 
   get botones(): Boton3D[] {

@@ -125,15 +125,11 @@ export class MultiSystem extends OficinaSystem {
       this.soloDespacho = [e.camion, e.botonDespacho.grupo, e.letreroDespacho.malla, e.pedestal, this.cajaPedido.raiz, e.letreroPedido.malla];
       e.botonDespacho.activo = false;
       // Panel de estado del centro: como un atril inclinado sobre la mesa de
-      // la izquierda, delante del monitor, mirando a la persona.
-      // El monitor se corre un poco hacia atrás para dejarle sitio.
-      e.panel.grupo.position.x = -0.74;
-      e.panel.grupo.position.z = -0.5;
-      mirarAlCentro(e.panel.grupo);
-      const ancho = 0.32;
+      // la DERECHA (donde el despachador tiene el camión), mirando a la persona.
+      const ancho = 0.36;
       this.panelEstado = new PanelEstado(ancho);
       const atril = new Group();
-      atril.position.set(-0.73, 0, -0.23);
+      atril.position.set(0.73, 0, -0.36);
       mirarAlCentro(atril);
       const inclinacion = 0.95; // rad: la cara mira hacia arriba, a los ojos
       const alto = ancho * 0.84;

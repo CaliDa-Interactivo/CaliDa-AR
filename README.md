@@ -15,8 +15,9 @@ repositorio ni en su enlace.
 1. En el Meta Quest 3, abre el navegador y entra a https://calida-interactivo.github.io/CaliDa-AR/
 2. Elige **Un jugador** o **Multijugador** y toca **Entrar en RA** (acepta los permisos de manos y
    espacio). Si ves la versión vieja, recarga la página.
-3. Si las gafas reconocen una mesa (Configuración del espacio), aparece un rectángulo blanco
-   encima: ahí irá la estantería, sobre la mesa real y a su altura. Si no, la mesa virtual flota.
+3. Si las gafas reconocen una superficie plana a altura de mesa (por los planos de la Configuración
+   del espacio o por la malla del cuarto), aparece un rectángulo blanco encima: ahí irá la
+   estantería, sobre la superficie real y a su altura. Si no, la mesa virtual flota.
 4. El gato y el botón **Colocar aquí** siguen tu mirada. Párate derecho, mira al frente y empuja el
    botón con la punta del índice: la oficina se calibra a tu estatura y queda anclada a ese lugar.
 
@@ -42,9 +43,10 @@ Menú bajo el panel de avisos: **Mover oficina**, **Recalibrar altura** y **Salt
 ## El juego
 
 - **Oficina en U** flotante (sin patas): a la izquierda el panel de avisos en la pantalla de un
-  monitor; al frente la **estantería de madera de la página** (5 categorías, tope 30, alerta en 25)
-  con los productos grandes (de a dos apilados al frente y el resto hacia atrás), el gato encima con
-  el reloj y la caneca de descarte a su izquierda, hacia el frente; la pila de cajas (máx. 8), la
+  monitor parado sobre la mesa; al frente la **estantería de madera de la página** (5 categorías,
+  tope 30, alerta en 25) con los productos grandes en una sola fila por producto y el conteo de cada
+  uno en su etiqueta, el gato encima con el reloj (su globo a la derecha) y la caneca de descarte
+  en la esquina delantera izquierda de la estantería; la pila de cajas (máx. 8), la
   zona de trabajo y la caja del pedido; a la derecha el camión de la Cruz Roja (la caja entra por
   sus puertas traseras) y el botón **Despachar**.
 - **Ejemplos (dos veces cada uno):** al inicio, una mano de ejemplo empuja con el índice el botón

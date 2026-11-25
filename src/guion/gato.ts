@@ -138,6 +138,7 @@ export class Gato {
   private poseHasta = Infinity;
   private v = new Vector3();
   private w = new Vector3();
+  private u = new Vector3();
 
   constructor(mundo: World, padre: Entity) {
     this.armado = crearGato(ALTO_GATO);
@@ -241,10 +242,22 @@ export class Gato {
       cola.rotation.y = Math.sin(t * (this.pose === 'triste' ? 0.5 : this.pose === 'feliz' ? 3 : 1.2)) * 0.25;
     }
 
-    // La burbuja va sobre el gato y mira a la persona sin inclinarse.
+    // La burbuja va a la DERECHA del gato (vista desde la persona), a la altura
+    // de su cara, y mira a la persona sin inclinarse.
     const panel = this.panel.object3D!;
     if (panel.visible) {
-      panel.position.set(gato.position.x, gato.position.y + ALTO_GATO + 0.24, gato.position.z);
+      // Hacia la persona (en el espacio del padre) y su derecha: (dz, 0, −dx).
+      const persona = padre.worldToLocal(this.u.copy(cabeza));
+      const dx = persona.x - gato.position.x;
+      const dz = persona.z - gato.position.z;
+      const largo = Math.hypot(dx, dz) || 1;
+      const escala = gato.scale.x;
+      const lado = 0.3 + 0.08 * escala;
+      panel.position.set(
+        gato.position.x + (dz / largo) * lado,
+        gato.position.y + ALTO_GATO * escala * 0.7,
+        gato.position.z - (dx / largo) * lado,
+      );
       panel.getWorldPosition(this.w);
       this.w.set(cabeza.x, this.w.y, cabeza.z);
       panel.lookAt(this.w);

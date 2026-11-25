@@ -128,8 +128,38 @@ export function dibujarPlaca(
   }
 }
 
+/** Parte de la etiqueta que ocupa el nombre (el resto es la insignia con el conteo). */
+const NOMBRE_ETIQUETA = 0.74;
+
+/**
+ * Etiqueta de producto con su conteo: el nombre (una o dos líneas) y, a la
+ * derecha, una insignia redonda con cuántos hay de ese producto.
+ */
+export function dibujarEtiquetaConteo(ctx: CanvasRenderingContext2D, ancho: number, alto: number, texto: string, tam: number, n: number): void {
+  dibujarEtiqueta(ctx, ancho, alto, texto, tam, NOMBRE_ETIQUETA);
+  const r = Math.min(alto * 0.36, ancho * (1 - NOMBRE_ETIQUETA) * 0.42);
+  const cx = ancho * (1 - (1 - NOMBRE_ETIQUETA) / 2) - ancho * 0.015;
+  ctx.fillStyle = n > 0 ? '#426D8C' : '#B8AD9C';
+  ctx.beginPath();
+  ctx.arc(cx, alto / 2, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${r * (n >= 10 ? 1.05 : 1.3)}px ${FAMILIA}`;
+  ctx.fillText(String(n), cx, alto / 2 + r * 0.06);
+}
+
 /** Etiqueta de producto (como las de la página): mismo diseño, en una o dos líneas. */
-export function dibujarEtiqueta(ctx: CanvasRenderingContext2D, ancho: number, alto: number, texto: string, tam: number): void {
+export function dibujarEtiqueta(
+  ctx: CanvasRenderingContext2D,
+  ancho: number,
+  alto: number,
+  texto: string,
+  tam: number,
+  /** Parte del ancho para el nombre (1 = todo, centrado). */
+  parte = 1,
+): void {
   ctx.clearRect(0, 0, ancho, alto);
   const radio = Math.min(alto * 0.42, ancho * 0.2);
   ctx.fillStyle = '#B9814F';
@@ -146,9 +176,10 @@ export function dibujarEtiqueta(ctx: CanvasRenderingContext2D, ancho: number, al
   ctx.fillStyle = '#011E41';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const filas = partirEnDos(ctx, texto, ancho * 0.88);
+  const filas = partirEnDos(ctx, texto, ancho * parte * 0.88);
   const paso = tam * 1.05;
-  filas.forEach((f, i) => ctx.fillText(f, ancho / 2, alto / 2 + (i - (filas.length - 1) / 2) * paso + tam * 0.04));
+  const cx = (ancho * parte) / 2 + (parte < 1 ? ancho * 0.02 : 0);
+  filas.forEach((f, i) => ctx.fillText(f, cx, alto / 2 + (i - (filas.length - 1) / 2) * paso + tam * 0.04));
 }
 
 /** Parte el texto en una o dos líneas para que quepa en `ancho`. */
@@ -222,9 +253,13 @@ class Placa {
   }
 
   /** Etiqueta de producto con un tamaño de letra dado (en px del lienzo). */
-  etiqueta(texto: string, tam: number): void {
+  etiqueta(texto: string, tam: number, conteo?: number): void {
     const c = this.ctx.canvas;
-    dibujarEtiqueta(this.ctx, c.width, c.height, texto, tam);
+    if (conteo === undefined) {
+      dibujarEtiqueta(this.ctx, c.width, c.height, texto, tam);
+    } else {
+      dibujarEtiquetaConteo(this.ctx, c.width, c.height, texto, tam, conteo);
+    }
     this.textura.needsUpdate = true;
   }
 }
@@ -253,8 +288,8 @@ interface Acomodo {
   fondos: number[];
 }
 
-/** Productos grandes: hasta 2 pisos y las filas que hagan falta hacia atrás (como en bodega). */
-const PISOS = 2;
+/** Objetos que se dibujan en la fila de cada producto (el resto no se ve, pero se cuenta). */
+const VISIBLES = 3;
 
 /** Alto de las etiquetas y placas (unidades del mueble); algo más que en la página para leerlas en RA. */
 const ALTO_ETIQUETA = 0.3;
@@ -272,6 +307,8 @@ export class Repisa {
   private acomodos: Acomodo[] = [];
   private bloques: InstancedMesh[][][] = [];
   private placas: Placa[] = [];
+  /** Etiqueta de cada producto (con su conteo). */
+  private etiquetas: { placa: Placa; nombre: string; tam: number; n: number }[][] = [];
   private estados: (string | null)[] = [];
   /** Productos que el multijugador espera ver aparecer (para no cambiar el modelo). */
   private preferidos: number[][] = CATEGORIAS.map(() => []);
@@ -285,24 +322,25 @@ export class Repisa {
       const c = COMPARTIMIENTOS[cat.id];
       const anchoU = ((c.x1 - c.x0) / cat.subs.length) * 0.92;
       for (const p of cat.subs) {
-        letra = Math.min(letra, (letraMaxima(p.nombre, 1024, pxAlto(anchoU)) / pxAlto(anchoU)) * ALTO_ETIQUETA);
+        letra = Math.min(letra, (letraMaxima(p.nombre, 1024 * NOMBRE_ETIQUETA, pxAlto(anchoU)) / pxAlto(anchoU)) * ALTO_ETIQUETA);
       }
     });
 
     CATEGORIAS.forEach((cat, i) => {
       const c = COMPARTIMIENTOS[cat.id];
       const n = cat.subs.length;
-      // Productos grandes (el doble que antes): uno de frente por columna
-      // (tres en Construcción, que es más ancha), dos pisos y el resto hacia
-      // atrás; los de atrás quedan detrás de los de adelante, como en bodega.
-      const ancho = cat.id === 'construccion' ? 3 : 1;
-      const pisos = PISOS;
-      const filas = Math.ceil(Math.ceil(TOPE / n) / (ancho * pisos));
+      // Productos grandes en UNA sola fila por producto, apoyados en la tabla
+      // (nada encima de nada): uno de frente y, detrás, los que siguen en fila
+      // (se ven unos pocos; el resto "cabe" en la fila sin verse). El conteo
+      // de cada producto va en su etiqueta.
+      const ancho = 1;
+      const pisos = 1;
+      const filas = VISIBLES;
       const colAncho = (c.x1 - c.x0) / n;
       const zFrente = frenteDe(c) - 0.06;
       const fondoU = zFrente - (MUEBLE.fondo + 0.04);
       const altoU = c.y1 - c.y0;
-      const altoPiso = (altoU * 0.78) / pisos;
+      const altoPiso = altoU * 0.72;
       const escalas = cat.subs.map((_, s) => {
         const t = tamDe(cat.id, s);
         return Math.min(
@@ -352,7 +390,10 @@ export class Repisa {
 
         // Etiqueta del producto clavada al frente de la tabla de abajo, bajo su columna.
         const etiqueta = new Placa(colAncho * 0.92 * S, ALTO_ETIQUETA * S);
-        etiqueta.etiqueta(p.nombre, (letra / ALTO_ETIQUETA) * etiqueta.ctx.canvas.height);
+        const tamLetra = (letra / ALTO_ETIQUETA) * etiqueta.ctx.canvas.height;
+        etiqueta.etiqueta(p.nombre, tamLetra, 0);
+        this.etiquetas[i] ??= [];
+        this.etiquetas[i][s] = { placa: etiqueta, nombre: p.nombre, tam: tamLetra, n: 0 };
         etiqueta.malla.position.set((c.x0 + colAncho * (s + 0.5)) * S, yTabla(c) * S, (frenteDe(c) + 0.035) * S);
         this.grupo.add(etiqueta.malla);
       });
@@ -401,7 +442,13 @@ export class Repisa {
     return salida.set(x * S, (c.y0 + piso * a.altoPiso) * S, a.zFrente * S - fondo / 2 - paso * fila);
   }
 
-  private capacidad(i: number): number {
+  /** Cuántos caben de un producto: la fila es "infinita" (el tope es el de la categoría). */
+  private capacidad(_i: number): number {
+    return TOPE;
+  }
+
+  /** Cuántos se dibujan en la fila de un producto. */
+  private visibles(i: number): number {
     const a = this.acomodos[i];
     return a.ancho * a.pisos * a.filas;
   }
@@ -438,7 +485,7 @@ export class Repisa {
   /** Puesto donde aparecerá el siguiente objeto de ese producto (para animar hasta allá). */
   siguientePuesto(i: number, sub: number, salida: Vector3): Vector3 {
     const s = this.columnaPara(i, sub);
-    return this.puestoEn(i, s, Math.min(this.capacidad(i) - 1, this.porProducto[i][s]), salida);
+    return this.puestoEn(i, s, Math.min(this.visibles(i) - 1, this.porProducto[i][s]), salida);
   }
 
   /** Escala con que se ve un producto en la estantería (sin el achicado de la ergonomía). */
@@ -539,10 +586,17 @@ export class Repisa {
   }
 
   private mostrar(i: number): void {
-    const cap = this.capacidad(i);
+    const vis = this.visibles(i);
     this.bloques[i].forEach((bloquesSub, s) => {
+      const n = this.porProducto[i][s];
       for (const b of bloquesSub) {
-        b.count = Math.min(cap, this.porProducto[i][s]);
+        b.count = Math.min(vis, n);
+      }
+      // Conteo en la etiqueta del producto.
+      const e = this.etiquetas[i]?.[s];
+      if (e && e.n !== n) {
+        e.n = n;
+        e.placa.etiqueta(e.nombre, e.tam, n);
       }
     });
     this.pintar(i);

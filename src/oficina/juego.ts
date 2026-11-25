@@ -35,6 +35,7 @@ import { Gato } from '../guion/gato.js';
 import { sonidos } from '../guion/sonidos.js';
 import { crearCaja, crearTarima, type CajaArmada } from './objetos.js';
 import { AnclaWebXR, SondaPiso, buscarSuperficie, type Superficie } from '../webxr.js';
+import { RejillaPlana, buscarSuperficieEnMalla, type MallaReal } from '../superficie.js';
 import {
   CATEGORIAS,
   COLOR,
@@ -137,6 +138,9 @@ export class OficinaSystem extends createSystem({}) {
   /** Superficie real (mesa) donde irá la estantería; null si no se reconoce ninguna. */
   protected superficie: Superficie | null = null;
   protected tSuperficie = 0;
+  /** Zonas planas de la malla del cuarto (si ninguna mesa está marcada como plano). */
+  protected rejilla = new RejillaPlana();
+  protected firmaMallas = '';
   /** Altura de la mesa real sobre el piso al colocar (null: la mesa flota). */
   protected mesaReal: number | null = null;
   /** Rectángulo blanco sobre la mesa real: ahí irá la estantería. */
@@ -248,7 +252,7 @@ export class OficinaSystem extends createSystem({}) {
     this.inicio.add(this.colocarBoton.grupo);
     const tarima = crearTarima();
     tarima.scale.setScalar(0.6);
-    tarima.position.set(-0.2, -0.36, -0.02);
+    tarima.position.set(-0.36, -0.36, -0.02);
     this.inicio.add(tarima);
     // Ejemplo de cómo se presiona: una mano empuja (solo de forma visual) "Colocar aquí".
     this.demoBoton = new DemoBoton(this.colocarBoton);
@@ -347,7 +351,7 @@ export class OficinaSystem extends createSystem({}) {
 
   private alturaInicio(): void {
     this.inicio.position.set(0.06, this.cabeza.y - this.escena.raiz.position.y - 0.32, -0.45);
-    this.gato.objeto.position.set(this.inicio.position.x - 0.2, this.inicio.position.y - 0.33, -0.47);
+    this.gato.objeto.position.set(this.inicio.position.x - 0.36, this.inicio.position.y - 0.33, -0.47);
   }
 
   /**
@@ -378,7 +382,7 @@ export class OficinaSystem extends createSystem({}) {
     this.alturaInicio();
     if (this.sonda.fuente && !this.vistas.has('piso') && !this.superficie) {
       this.vistas.add('piso');
-      this.gato.decir('Ya encontré el piso. Mira hacia donde quieras la oficina y empuja "Colocar aquí".');
+      this.gato.decir('Ya encontré el piso. Mira hacia una mesa (o donde quieras la oficina) y empuja "Colocar aquí".');
     }
   }
 
@@ -402,7 +406,10 @@ export class OficinaSystem extends createSystem({}) {
     const z = HUELLA_REPISA.centroZ;
     const deseado = { x: this.cabeza.x + z * Math.sin(giro), z: this.cabeza.z + z * Math.cos(giro), giro };
     const antes = this.superficie;
-    this.superficie = buscarSuperficie(cuadro, espacio, this.pisoY(), deseado, HUELLA_REPISA.ancho, HUELLA_REPISA.fondo);
+    const piso = this.pisoY();
+    this.superficie =
+      buscarSuperficie(cuadro, espacio, piso, deseado, HUELLA_REPISA.ancho, HUELLA_REPISA.fondo) ??
+      this.buscarEnMalla(cuadro, espacio, piso, deseado);
     const sup = this.superficie;
     this.vistaPrevia.visible = !!sup;
     if (sup) {
@@ -411,9 +418,40 @@ export class OficinaSystem extends createSystem({}) {
       if (!antes && !this.vistas.has('mesa')) {
         this.vistas.add('mesa');
         this.vistas.add('piso');
-        this.gato.decir('Encontré una mesa: la estantería irá en el rectángulo blanco. Empuja "Colocar aquí".');
+        this.gato.decir('Encontré una superficie plana: la estantería irá en el rectángulo blanco. Empuja "Colocar aquí".');
       }
     }
+  }
+
+  /** Respaldo: zonas planas de la malla del cuarto (se rearma solo si la malla cambió). */
+  protected buscarEnMalla(
+    cuadro: XRFrame,
+    espacio: XRReferenceSpace,
+    piso: number,
+    deseado: { x: number; z: number; giro: number },
+  ): Superficie | null {
+    let mallas: XRMesh[] = [];
+    try {
+      mallas = [...(cuadro.detectedMeshes ?? [])];
+    } catch {
+      return null;
+    }
+    if (mallas.length === 0) {
+      return null;
+    }
+    const firma = `${mallas.length}:${mallas.reduce((a, m) => a + m.lastChangedTime, 0)}:${piso.toFixed(2)}`;
+    if (firma !== this.firmaMallas) {
+      this.firmaMallas = firma;
+      const reales: MallaReal[] = [];
+      for (const m of mallas) {
+        const pose = cuadro.getPose(m.meshSpace, espacio);
+        if (pose) {
+          reales.push({ matriz: pose.transform.matrix, vertices: m.vertices, indices: m.indices });
+        }
+      }
+      this.rejilla.armar(reales, piso);
+    }
+    return buscarSuperficieEnMalla(this.rejilla, deseado, HUELLA_REPISA.ancho, HUELLA_REPISA.fondo);
   }
 
   /** Arma la oficina donde está la persona, mirando hacia donde mira. */

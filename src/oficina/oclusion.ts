@@ -345,7 +345,7 @@ const SIN_CONTORNO = new Set([0, 1, 5, 10, 15, 20]);
 
 /** No pinta color, solo profundidad: tapa lo virtual que queda detrás. */
 const MATERIAL_TAPA = new MeshBasicMaterial({ colorWrite: false, side: DoubleSide });
-/** Línea blanca fina alrededor de la mano (como la de las manos del Quest). */
+/** Línea blanca fina alrededor de la mano de ejemplo (demo.ts). */
 export const MATERIAL_LINEA = new MeshBasicMaterial({
   color: '#FFFFFF',
   side: BackSide,
@@ -358,23 +358,20 @@ export const MATERIAL_LINEA = new MeshBasicMaterial({
 export const GROSOR_LINEA = 0.0022;
 
 /**
- * La mano real tapa lo virtual a ras (radio real, sin margen) y lleva una
- * línea blanca fina alrededor. No se dibuja nada más de la mano: se ve la
- * mano real (passthrough).
+ * La mano real tapa lo virtual a ras (radio real, sin margen). No se dibuja
+ * nada de la mano (ni línea): se ve la mano real (passthrough).
  */
 export class OclusorManos {
   readonly grupo = new Group();
   private tapa = new PiezasMano({ material: MATERIAL_TAPA, margen: 0, orden: -10, palma: true, contorno: false });
-  private linea = new PiezasMano({ material: MATERIAL_LINEA, margen: GROSOR_LINEA, orden: -9, palma: false, contorno: true });
   private datos: (DatosMano | null)[] = [null, null];
 
   constructor() {
-    this.grupo.add(this.tapa.grupo, this.linea.grupo);
+    this.grupo.add(this.tapa.grupo);
   }
 
   actualizar(manos: Mano[]): void {
     manos.forEach((mano, k) => (this.datos[k] = mano.conArticulaciones ? mano : null));
     this.tapa.actualizar(this.datos);
-    this.linea.actualizar(this.datos);
   }
 }

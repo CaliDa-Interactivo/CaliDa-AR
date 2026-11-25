@@ -88,16 +88,16 @@ export class Panel {
     this.volver = new Boton3D('Volver', 0.1, 0.036, BOTON.secundario);
     this.colocar(this.volver, 960, 800);
     this.volver.alPresionar = () => this.verAvisos();
-    // Debajo del monitor (el menú): mover la oficina, recalibrar la altura y saltar el tutorial.
+    // Debajo del monitor, delante de su pie (el menú): mover la oficina, recalibrar la altura y saltar el tutorial.
     const yMenu = -ALTO_PANEL / 2 - 0.05;
     this.mover = new Boton3D('Mover oficina', 0.135, 0.036, BOTON.secundario);
-    this.mover.grupo.position.set(-0.145, yMenu, 0);
+    this.mover.grupo.position.set(-0.145, yMenu, 0.09);
     this.grupo.add(this.mover.grupo);
     this.recalibrar = new Boton3D('Recalibrar altura', 0.145, 0.036, BOTON.secundario);
-    this.recalibrar.grupo.position.set(0, yMenu, 0);
+    this.recalibrar.grupo.position.set(0, yMenu, 0.09);
     this.grupo.add(this.recalibrar.grupo);
     this.saltar = new Boton3D('Saltar tutorial', 0.135, 0.036, BOTON.secundario);
-    this.saltar.grupo.position.set(0.145, yMenu, 0);
+    this.saltar.grupo.position.set(0.145, yMenu, 0.09);
     this.grupo.add(this.saltar.grupo);
     this.verAvisos();
   }

@@ -32,7 +32,7 @@ import {
   Vector3,
   type Object3D,
 } from '@iwsdk/core';
-import { ENTRADA, PLATAFORMA, crearCamion, crearMonitor, sombra } from './objetos.js';
+import { ENTRADA, PLATAFORMA, bajoPantalla, crearCamion, crearMonitor, sombra } from './objetos.js';
 import { COLOR } from './datos.js';
 import { ALTO_PANEL, ANCHO_PANEL, Panel } from './panel.js';
 import { ALTO_REPISA, ANCHO_REPISA, Repisa } from './repisa.js';
@@ -47,11 +47,13 @@ const MESAS: [number, number, number, number][] = [
   [0.55, 0.9, -0.75, -0.05], // derecha
 ];
 
-export const PILA = [new Vector3(-0.33, 0, -0.4), new Vector3(-0.14, 0, -0.4)];
+export const PILA = [new Vector3(-0.27, 0, -0.36), new Vector3(-0.08, 0, -0.36)];
 export const TRABAJO = new Vector3(0.1, 0, -0.41);
 export const PEDIDO = new Vector3(0.4, 0, -0.41);
-/** Caneca de descarte: a la izquierda de la estantería, hacia el frente (cerca de la persona). */
-export const CANECA = new Vector3(-0.62, 0, -0.42);
+/** Caneca de descarte: junto a la esquina delantera izquierda (abajo) de la estantería. */
+export const CANECA = new Vector3(-0.45, 0, -0.47);
+/** Monitor del computador: parado sobre la mesa de la izquierda. */
+const MONITOR = new Vector3(-0.72, 0, -0.4);
 export const ESCALA_CAJA = 0.7;
 /** El gato encima de la estantería, un poco más pequeño. */
 export const ESCALA_GATO = 0.7;
@@ -151,9 +153,12 @@ export class Escena {
 
     // Panel de avisos a la izquierda, en la pantalla del monitor del computador
     // (la interfaz es la misma: solo cambia el contenedor).
+    // El monitor está parado sobre la mesa de la izquierda (la base del pie toca
+    // la mesa) y mira a la persona.
     this.panel.grupo.add(crearMonitor(ANCHO_PANEL * 1.03, ALTO_PANEL * 1.03));
     this.sobre.add(this.panel.grupo);
-    this.ubicar(this.panel.grupo, ANGULO.panel);
+    this.panel.grupo.position.set(MONITOR.x, bajoPantalla(ALTO_PANEL * 1.03) + 0.002, MONITOR.z);
+    mirarAlCentro(this.panel.grupo);
 
     // Camión a la derecha (mira hacia el fondo) y su botón.
     const camion = crearCamion();

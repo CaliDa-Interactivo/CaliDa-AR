@@ -1,7 +1,7 @@
 // Prueba de buscarSuperficie: la estantería queda SOBRE una mesa real.
 // Corre con: npm run prueba:superficie
 import assert from 'node:assert/strict';
-import { buscarSuperficie, type Superficie } from '../src/superficie.js';
+import { RejillaPlana, buscarSuperficie, buscarSuperficieEnMalla, type MallaReal, type Superficie } from '../src/superficie.js';
 
 let pruebas = 0;
 const prueba = (nombre: string, fn: () => void) => {
@@ -130,6 +130,46 @@ prueba('mesa a más de un metro adelante: se encuentra igual', () => {
 prueba('sin planos detectados: nada (la mesa flota como antes)', () => {
   const vacio = { detectedPlanes: undefined, getPose: () => null } as unknown as XRFrame;
   assert.equal(buscarSuperficie(vacio, ESPACIO, 0, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO), null);
+});
+
+// ---- Malla del cuarto ----
+
+const IDENTIDAD = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+/** Rectángulo horizontal (dos triángulos) de x0..x1, z0..z1 a la altura y. */
+function rect(x0: number, x1: number, z0: number, z1: number, y: number): MallaReal {
+  return { matriz: IDENTIDAD, vertices: [x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1], indices: [0, 2, 1, 0, 3, 2] };
+}
+/** Pared vertical (no cuenta). */
+const pared: MallaReal = { matriz: IDENTIDAD, vertices: [-2, 0, -2, 2, 0, -2, 2, 2.5, -2, -2, 2.5, -2], indices: [0, 1, 2, 0, 2, 3] };
+
+prueba('malla: tablero de mesa sin marcar como plano → la estantería queda encima', () => {
+  const r = new RejillaPlana();
+  r.armar([rect(-3, 3, -3, 3, 0), pared, rect(-0.6, 0.6, -1.0, -0.4, 0.74)], 0);
+  const s = buscarSuperficieEnMalla(r, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO);
+  assert.ok(s);
+  assert.equal(s.y.toFixed(2), '0.74');
+  assert.ok(sobreMesa(s, 0, -0.7, 1.2, 0.6));
+});
+
+prueba('malla: solo piso y paredes → nada', () => {
+  const r = new RejillaPlana();
+  r.armar([rect(-3, 3, -3, 3, 0), pared], 0);
+  assert.equal(buscarSuperficieEnMalla(r, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO), null);
+});
+
+prueba('malla: dos superficies a distinta altura no se mezclan', () => {
+  const r = new RejillaPlana();
+  // Mitad a 0,74 y mitad a 0,90: en ninguna de las dos sola cabe la estantería.
+  r.armar([rect(-0.5, 0, -0.9, -0.4, 0.74), rect(0, 0.5, -0.9, -0.4, 0.9)], 0);
+  assert.equal(buscarSuperficieEnMalla(r, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO), null);
+});
+
+prueba('malla: mesa con un objeto pequeño encima (un libro) sirve igual', () => {
+  const r = new RejillaPlana();
+  r.armar([rect(-0.6, 0.6, -1.0, -0.4, 0.74), rect(-0.4, -0.3, -0.7, -0.6, 0.8)], 0);
+  const s = buscarSuperficieEnMalla(r, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO);
+  assert.ok(s);
+  assert.ok(Math.abs(s.y - 0.74) < 0.01, 'la altura es la de la mesa, no la del libro');
 });
 
 console.log(`\n${pruebas} pruebas de la mesa real en verde.`);

@@ -586,6 +586,11 @@ export function crearCamion(): CamionArmado {
 
 /** Pantalla del monitor de escritorio.glb (coordenadas del nodo "Monitor"). */
 const PANTALLA = { x: -0.017, y: 0.323, z: 0.065, ancho: 0.81, alto: 0.458 };
+/** Parte más baja del monitor (la base del pie), en coordenadas del nodo. */
+const BASE_MONITOR = -0.036;
+
+/** Cuánto baja la base del monitor desde el centro de la pantalla (m), para una pantalla de ese alto. */
+export const bajoPantalla = (alto: number): number => (PANTALLA.y - BASE_MONITOR) * (alto / PANTALLA.alto);
 
 /**
  * El monitor del computador (solo el monitor de escritorio.glb: sin mesa,

@@ -49,8 +49,8 @@
       "locomotion": false,
       "grabbing": true,
       "physics": false,
-      "sceneUnderstanding": true,
-      "environmentRaycast": true
+      "sceneUnderstanding": false,
+      "environmentRaycast": false
     }
   },
   "dev": {

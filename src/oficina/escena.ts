@@ -120,8 +120,6 @@ export class Escena {
   alto = 0.9;
   /** Altura de los ojos sobre el piso medida al calibrar. */
   ojos = 1.55;
-  /** Patas de la mesa virtual (solo cuando no está sobre una mesa real). */
-  private readonly patas = new Group();
   /** Paneles que se ubican según la ergonomía (ángulo y distancia). */
   private ubicados = new Map<Object3D, { angulo: number; distancia: number }>();
 
@@ -251,30 +249,17 @@ export class Escena {
   }
 
   /**
-   * Tableros con la madera de la estantería de la página. Sobre una mesa real
-   * se apoyan en ella; si no hay, se apoyan en el piso con patas.
+   * Tableros flotantes con la madera de la estantería de la página (sin
+   * patas). Sobre una mesa real se apoyan encima de ella.
    */
   private armarMesas(): void {
     const tablero = new MeshStandardMaterial({ color: '#C98F62', emissive: '#3A1F0E', roughness: 0.9 });
     const canto = new MeshStandardMaterial({ color: '#B87048', emissive: '#4E2A14', roughness: 0.9 });
-    // Patas: cilindros de 1 m que se estiran hasta el piso (ver ajustarErgonomia).
-    const geoPata = new CylinderGeometry(0.018, 0.018, 1, 12);
     for (const [x0, x1, z0, z1] of MESAS) {
       const t = new Mesh(new BoxGeometry(x1 - x0, GROSOR_MESA, z1 - z0), [canto, canto, tablero, canto, canto, canto]);
       t.position.set((x0 + x1) / 2, -GROSOR_MESA / 2, (z0 + z1) / 2);
       this.sobre.add(t);
-      for (const [px, pz] of [
-        [x0 + 0.04, z0 + 0.04],
-        [x1 - 0.04, z0 + 0.04],
-        [x0 + 0.04, z1 - 0.04],
-        [x1 - 0.04, z1 - 0.04],
-      ]) {
-        const pata = new Mesh(geoPata, canto);
-        pata.position.set(px, -0.5, pz);
-        this.patas.add(pata);
-      }
     }
-    this.sobre.add(this.patas);
   }
 
   /** Pone un panel a `angulo` grados (positivo a la izquierda), a la altura de la vista. */
@@ -319,13 +304,6 @@ export class Escena {
         ? Math.min(1.3, Math.max(0.35, mesaReal)) + GROSOR_MESA
         : Math.min(1.15, Math.max(0.6, 0.63 * estatura - 0.075));
     this.sobre.position.y = this.alto;
-    // Sin mesa real, la mesa virtual se apoya en el piso con sus patas.
-    const largoPata = Math.max(0.05, this.alto - GROSOR_MESA);
-    this.patas.visible = mesaReal === null;
-    for (const pata of this.patas.children) {
-      pata.scale.y = largoPata;
-      pata.position.y = -GROSOR_MESA - largoPata / 2;
-    }
     // Estantería: la fila de arriba queda bajo la línea de los ojos. Se achica
     // solo un poco si hace falta, para que los productos se vean grandes.
     const techo = Math.min(this.ojos - 0.1, 0.9 * estatura);

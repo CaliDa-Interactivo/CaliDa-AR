@@ -13,6 +13,7 @@
 // Todo en el espacio del mundo (el jugador está en el origen).
 // ============================================================
 import { Quaternion, Vector3 } from '@iwsdk/core';
+import { manoValida, radioSeguro } from './seguridad-oclusion.js';
 
 /** Distancia pulgar–índice para cerrar y para abrir la pinza (m). */
 const CIERRA = 0.018;
@@ -170,7 +171,11 @@ export class Manos {
       mano.articulaciones[i * 3] = t.x;
       mano.articulaciones[i * 3 + 1] = t.y;
       mano.articulaciones[i * 3 + 2] = t.z;
-      mano.radios[i] = pj.radius ?? 0.008;
+      mano.radios[i] = radioSeguro(pj.radius ?? 0.008);
+    }
+    // Un dato raro del visor no puede convertirse en una mano gigante que lo tape todo.
+    if (mano.conArticulaciones && !manoValida(mano.articulaciones)) {
+      mano.conArticulaciones = false;
     }
     return true;
   }

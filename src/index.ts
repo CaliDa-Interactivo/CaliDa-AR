@@ -6,6 +6,7 @@ import { OficinaSystem } from './oficina/juego.js';
 import { MultiSystem } from './oficina/multi.js';
 import { Red, type Rol } from './oficina/red.js';
 import { comprobarWebXR } from './webxr.js';
+import { pedirProfundidad, usarOclusionIWSDK } from './oficina/seguridad-oclusion.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const entrada = $<HTMLDivElement>('entrada');
@@ -48,6 +49,14 @@ const fuentes = Promise.race([
   new Promise((listo) => setTimeout(listo, 4000)),
 ]).catch(() => undefined);
 
+// La profundidad del visor solo se pide en los modos de prueba (?oclusionsuave,
+// ?diagnostico): por defecto no se toca, así ni IWSDK ni three.js recortan la
+// escena con ella (ver src/oficina/seguridad-oclusion.ts).
+const funciones = projectOptions.xr ? projectOptions.xr.features : undefined;
+if (funciones && !pedirProfundidad(parametros)) {
+  delete funciones.depthSensing;
+}
+
 const mundo = fuentes.then(() => World.create($<HTMLDivElement>('scene-container'), projectOptions));
 mundo.catch((e: unknown) => mostrarError(`no se pudo cargar (${(e as Error)?.message ?? e}). Recarga la página.`));
 mundo.then(async (world) => {
@@ -64,12 +73,10 @@ mundo.then(async (world) => {
       return;
     }
     registrado = true;
-    // Oclusión con la profundidad real (Quest 3). Por defecto la hace three.js:
-    // cuando el visor da la profundidad (gpu-optimized), three escribe la
-    // profundidad real en el búfer y lo real (las manos) tapa lo virtual a ras,
-    // sin convertir unidades. La oclusión suave de IWSDK dejaba la escena
-    // invisible en el Quest; se puede probar con ?oclusionsuave.
-    if (parametros.has('oclusionsuave')) {
+    // Oclusión por profundidad de IWSDK: SOLO con ?oclusionsuave (para probar).
+    // Por defecto dejaba la escena invisible en el Quest 3; las manos tapan con
+    // la mano invisible (ver src/oficina/seguridad-oclusion.ts).
+    if (usarOclusionIWSDK(parametros)) {
       world.registerSystem(DepthSensingSystem, {
         configData: { enableDepthTexture: true, enableOcclusion: true, useFloat32: true, blurRadius: 8 },
       });

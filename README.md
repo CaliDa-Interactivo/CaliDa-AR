@@ -102,7 +102,7 @@ npm install
 npm run dev              # emulador IWER con un Quest 3 simulado
 npm run typecheck        # siempre antes de probar
 npm run build            # compila a dist/
-npm run prueba:compartido  # pruebas de las reglas del multijugador (node)
+npm run pruebas          # multijugador y oclusión (node); también corren en GitHub antes de publicar
 ```
 
 Las manos reales tapan lo virtual con una "mano invisible" armada con las articulaciones y radios

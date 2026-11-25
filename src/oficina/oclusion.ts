@@ -40,6 +40,7 @@ import {
   type World,
 } from '@iwsdk/core';
 import type { Mano } from './manos.js';
+import { radioSeguro } from './seguridad-oclusion.js';
 
 /** La malla de la mano de IWSDK: no se dibuja (ni color ni profundidad). */
 const INVISIBLE = new MeshBasicMaterial({ visible: false });
@@ -303,7 +304,7 @@ export class PiezasMano {
         if (this.op.contorno && SIN_CONTORNO.has(i)) {
           continue;
         }
-        const radio = r[i] + margen;
+        const radio = radioSeguro(r[i]) + margen;
         this.m.makeScale(radio, radio, radio).setPosition(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
         this.esferas.setMatrixAt(nE++, this.m);
       }
@@ -318,7 +319,7 @@ export class PiezasMano {
         if (largo < 1e-4) {
           continue;
         }
-        const radio = Math.min(r[i], r[j]) + margen;
+        const radio = Math.min(radioSeguro(r[i]), radioSeguro(r[j])) + margen;
         this.q.setFromUnitVectors(this.arriba, this.d.multiplyScalar(1 / largo));
         this.s.set(radio, largo, radio);
         this.a.add(this.b).multiplyScalar(0.5);

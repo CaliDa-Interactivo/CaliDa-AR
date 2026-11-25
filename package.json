@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
-    "prueba:compartido": "esbuild pruebas/compartido.prueba.ts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/prueba-compartido.mjs && node node_modules/.cache/prueba-compartido.mjs"
+    "prueba:compartido": "esbuild pruebas/compartido.prueba.ts --bundle --platform=node --format=esm --log-level=warning --outfile=pruebas/.salida/compartido.mjs && node pruebas/.salida/compartido.mjs",
+    "prueba:oclusion": "esbuild pruebas/oclusion.prueba.ts --bundle --platform=node --format=esm --log-level=warning --outfile=pruebas/.salida/oclusion.mjs && node pruebas/.salida/oclusion.mjs",
+    "pruebas": "npm run prueba:compartido && npm run prueba:oclusion"
   },
   "dependencies": {
     "@iwsdk/core": "1.1.0-rc.2",

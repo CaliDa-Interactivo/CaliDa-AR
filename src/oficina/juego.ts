@@ -61,6 +61,7 @@ import {
 } from './escena.js';
 import { Interaccion, type Agarrable, type Destino } from './interaccion.js';
 import { Oclusion, OclusorManos } from './oclusion.js';
+import { usarOclusionIWSDK } from './seguridad-oclusion.js';
 import { Diagnostico } from './diagnostico.js';
 import { DemoBoton, DemoPinza } from './demo.js';
 import { Manos } from './manos.js';
@@ -166,12 +167,14 @@ export class OficinaSystem extends createSystem({}) {
   init(): void {
     const mundo = this.world;
     this.raizEnt = mundo.createTransformEntity(this.escena.raiz);
-    try {
-      // Oclusión suave (la que funciona en el Quest 3). El modo MinMax dejaba la
-      // escena invisible dentro de la sesión: no usarlo.
-      this.raizEnt.addComponent(DepthOccludable, { mode: OcclusionShadersMode.SoftOcclusion });
-    } catch {
-      // Sin el sistema de profundidad (?sinoclusion): no hay oclusión.
+    // Oclusión por profundidad de IWSDK: SOLO con ?oclusionsuave. Por defecto
+    // dejaba toda la escena invisible en el Quest 3 (ver seguridad-oclusion.ts).
+    if (usarOclusionIWSDK(new URLSearchParams(window.location.search))) {
+      try {
+        this.raizEnt.addComponent(DepthOccludable, { mode: OcclusionShadersMode.SoftOcclusion });
+      } catch {
+        // Sin el sistema de profundidad registrado: no hay oclusión.
+      }
     }
     this.oclusion = new Oclusion(mundo, this.escena.raiz, this.raizEnt);
     // Las articulaciones vienen en el espacio de referencia (el del jugador).

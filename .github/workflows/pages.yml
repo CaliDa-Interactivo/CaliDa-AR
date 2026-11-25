@@ -29,6 +29,9 @@ jobs:
       # compilación del sitio no necesita (y a veces fallan en GitHub).
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
+      # Pruebas con node: reglas del multijugador y que la oclusión no pueda
+      # volver a dejar la escena invisible en las gafas. Si fallan, no se publica.
+      - run: npm run pruebas
       - run: npm run build
       - uses: actions/configure-pages@v5
         with:

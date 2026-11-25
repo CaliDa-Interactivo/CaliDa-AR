@@ -252,7 +252,9 @@ export class OficinaSystem extends createSystem({}) {
     this.inter.sonar = (q) => sonidos[q]();
     this.inter.botones.push(...this.escena.botones, this.colocarBoton);
 
-    // Inicio: botón "Colocar aquí" y el gato sobre su tarima.
+    // Inicio: el gato sobre su tarima a la izquierda, su mensaje a la derecha
+    // y "Colocar aquí" DEBAJO del mensaje (centrado con él, sin taparlo).
+    this.colocarBoton.grupo.position.set(-0.02, -0.33, 0);
     this.inicio.add(this.colocarBoton.grupo);
     const tarima = crearTarima();
     tarima.scale.setScalar(0.6);
@@ -356,7 +358,8 @@ export class OficinaSystem extends createSystem({}) {
   }
 
   private alturaInicio(): void {
-    this.inicio.position.set(0.06, this.cabeza.y - this.escena.raiz.position.y - 0.32, -0.45);
+    // El conjunto sube un poco: el botón queda a la altura del pecho.
+    this.inicio.position.set(0.06, this.cabeza.y - this.escena.raiz.position.y - 0.2, -0.45);
     this.gato.objeto.position.set(this.inicio.position.x - 0.36, this.inicio.position.y - 0.33, -0.47);
   }
 

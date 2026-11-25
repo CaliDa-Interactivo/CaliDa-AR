@@ -250,11 +250,21 @@ export class Chat {
       ctx.font = `400 24px ${FUENTE}`;
       const hora = m.hora ?? '';
       const anchoHora = hora ? ctx.measureText(hora).width + 18 : 0;
-      const ancho = Math.min(l.ancho - 80, 28 + anchoAntes + (icono ? 70 : 0) + anchoDespues + anchoHora + 26);
+      const natural = 28 + anchoAntes + (icono ? 70 : 0) + anchoDespues + anchoHora + 26;
+      const ancho = Math.min(l.ancho - 80, natural);
+      // Si no cabe (chat angosto de la pantalla), el contenido se comprime un
+      // poco a lo ancho en vez de salirse del globo (la hora se cortaba).
       const x = mio ? l.ancho - 34 - ancho : 34;
       ctx.fillStyle = mio ? BOTON.principal : '#F3E4CB';
       rect(ctx, x, y, ancho, ALTO, ALTO / 2);
       ctx.fill();
+      const k = ancho / natural;
+      ctx.save();
+      if (k < 1) {
+        ctx.translate(x, 0);
+        ctx.scale(k, 1);
+        ctx.translate(-x, 0);
+      }
       let cx = x + 28;
       const medio = y + ALTO / 2 + 11;
       ctx.fillStyle = mio ? BOTON.textoClaro : BOTON.textoOscuro;
@@ -274,6 +284,7 @@ export class Chat {
         ctx.fillStyle = mio ? 'rgba(255, 246, 230, 0.8)' : '#6E655D';
         ctx.fillText(hora, cx, medio - 2);
       }
+      ctx.restore();
       y += ALTO + 10;
     }
     if (mensajes.length === 0) {

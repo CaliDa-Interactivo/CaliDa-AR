@@ -54,3 +54,4 @@ pids/
 
 # Salida de las pruebas con node
 pruebas/.salida/
+capturas/

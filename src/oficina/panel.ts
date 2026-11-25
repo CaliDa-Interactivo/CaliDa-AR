@@ -21,6 +21,8 @@ const S = ANCHO_PANEL / PX_ANCHO; // metros por píxel
 const TARJETAS = 3;
 const Y_TARJETA = 150;
 const ALTO_TARJETA = 205;
+/** Centro (px) de los botones de las tarjetas: dentro del borde derecho. */
+const X_BOTON = 915;
 
 const ESTILO: Record<string, { fondo: string; texto: string; titulo: string }> = {
   cajas: { fondo: COLOR.petroleo, texto: COLOR.crema, titulo: 'DONACIONES' },
@@ -75,7 +77,7 @@ export class Panel {
     for (let i = 0; i < TARJETAS; i++) {
       const b = new Boton3D('Aceptar', 0.105, 0.042);
       b.activo = false; // se prende al pintar una tarjeta con acción
-      this.colocar(b, 945, Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2);
+      this.colocar(b, X_BOTON, Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2);
       b.alPresionar = () => {
         const aviso = this.visibles[i];
         if (aviso && aviso.estado === 'pendiente' && aviso.accion) {
@@ -86,9 +88,9 @@ export class Panel {
     }
     // Segundo botón de cada tarjeta (Rechazar), debajo del de acción.
     for (let i = 0; i < TARJETAS; i++) {
-      const b = new Boton3D('Rechazar', 0.105, 0.034, BOTON.peligro);
+      const b = new Boton3D('Rechazar', 0.085, 0.034, BOTON.peligro);
       b.activo = false;
-      this.colocar(b, 945, Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2 + 50);
+      this.colocar(b, X_BOTON, Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2 + 48);
       b.alPresionar = () => {
         const aviso = this.visibles[i];
         if (aviso && aviso.estado === 'pendiente' && aviso.rechazo) {
@@ -258,9 +260,12 @@ export class Panel {
         if (b.texto !== a.accion) {
           b.escribir(a.accion);
         }
-        // Con dos botones, el de acción sube un poco.
-        const y = Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2 + (a.rechazo ? -46 : 0);
-        this.colocar(b, 945, y);
+        // Con dos botones (Aceptar / Rechazar), el de acción sube y se
+        // achica al tamaño de Rechazar: quedan iguales, uno sobre otro,
+        // separados y dentro de la tarjeta.
+        b.grupo.scale.setScalar(a.rechazo ? 0.81 : 1);
+        const y = Y_TARJETA + i * (ALTO_TARJETA + 12) + ALTO_TARJETA / 2 + (a.rechazo ? -48 : 0);
+        this.colocar(b, X_BOTON, y);
       }
     });
     this.botonesRechazo.forEach((b, i) => {

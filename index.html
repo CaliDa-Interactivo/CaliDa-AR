@@ -47,8 +47,110 @@
         position: fixed;
         inset: 0;
       }
+      /* Portada (como la pantalla de inicio de la página de CaliDa): cielo
+         celeste, manchas suaves y la isla con el gato a la derecha. Se ve
+         solo mientras está la pantalla de entrada. */
+      #portada {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        overflow: hidden;
+        pointer-events: none;
+        background:
+          radial-gradient(70% 50% at 50% 30%, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 70%),
+          radial-gradient(85% 80% at 50% 42%, rgba(1, 30, 65, 0) 45%, rgba(1, 30, 65, 0.16) 100%),
+          linear-gradient(#8dc1d3 0%, #7fb8cc 55%, #72acc0 100%);
+      }
+      #entrada[hidden] + #portada {
+        display: none;
+      }
+      #portada span {
+        position: absolute;
+        border-radius: 50%;
+        animation: flotar 9s ease-in-out infinite;
+      }
+      #portada .m1 {
+        width: 46vw;
+        height: 46vw;
+        left: -14vw;
+        bottom: -26vw;
+        background: radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.12) 70%);
+      }
+      #portada .m2 {
+        width: 30vw;
+        height: 30vw;
+        right: -10vw;
+        bottom: -8vw;
+        background: radial-gradient(circle at 40% 40%, rgba(246, 201, 168, 0.75), rgba(246, 201, 168, 0.15) 70%);
+        animation-delay: -3s;
+      }
+      #portada .m3 {
+        width: 18vw;
+        height: 18vw;
+        left: 38vw;
+        top: -8vw;
+        background: radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 70%);
+        animation-delay: -5s;
+      }
+      #portada .p2 {
+        width: 10px;
+        height: 10px;
+        left: 46vw;
+        top: 72vh;
+        background: #fdd794;
+        animation-duration: 6s;
+        animation-delay: -2s;
+      }
+      #portada .p3 {
+        width: 18px;
+        height: 18px;
+        right: 6vw;
+        top: 22vh;
+        background: rgba(255, 248, 237, 0.85);
+        animation-duration: 6s;
+        animation-delay: -4s;
+      }
+      #portada img {
+        position: absolute;
+        right: 3vw;
+        top: 50%;
+        width: min(50vw, 100vh);
+        height: auto;
+        transform: translateY(-50%);
+        animation: flotar-isla 7s ease-in-out infinite;
+      }
+      @keyframes flotar {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-14px);
+        }
+      }
+      @keyframes flotar-isla {
+        0%,
+        100% {
+          transform: translateY(-50%);
+        }
+        50% {
+          transform: translateY(calc(-50% - 14px));
+        }
+      }
+      /* Pantallas angostas: la isla arriba, el recuadro abajo. */
+      @media (max-width: 760px) {
+        #portada img {
+          left: 50%;
+          right: auto;
+          top: 4vh;
+          width: min(92vw, 60vh);
+          transform: translateX(-50%);
+          animation: none;
+        }
+      }
       #entrada {
         position: fixed;
+        z-index: 2;
         left: 24px;
         bottom: 24px;
         max-width: 360px;
@@ -208,6 +310,11 @@
         <button id="volver-modo" type="button">Volver</button>
       </div>
       <p id="webxr">Comprobando WebXR…</p>
+    </div>
+    <div id="portada" aria-hidden="true">
+      <span class="m1"></span><span class="m2"></span><span class="m3"></span>
+      <span class="p2"></span><span class="p3"></span>
+      <img src="./inicio/isla.webp" alt="" width="1200" height="1049" />
     </div>
     <script>
       // Después de publicar una versión nueva, el navegador puede tener la

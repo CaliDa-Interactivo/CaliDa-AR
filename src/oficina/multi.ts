@@ -32,6 +32,7 @@ import {
   DIAS,
   INVENTARIO_INICIAL,
   JORNADAS,
+  MUNICIPIOS,
   TOPE,
   indiceCategoria,
   type Evento,
@@ -287,6 +288,48 @@ export class MultiSystem extends OficinaSystem {
     if (e.tipo === 'pedido' && this.rol === 'despachador') {
       super.evento(e);
     }
+  }
+
+  /** Segundos desde el último pedido extra del despachador. */
+  private tPedidoExtra = 0;
+  private nPedidoExtra = 0;
+
+  /**
+   * Despachador: pedidos seguidos, además de los del día. Sin pedidos
+   * abiertos, llega uno a los pocos segundos; con alguno abierto, otro cada
+   * 15 s (menos los días siguientes), hasta 3 abiertos a la vez. Piden lo que
+   * hay en la estantería compartida (si no hay, lo que falta: se le pide al
+   * receptor por el chat).
+   */
+  protected siempreConTareas(dt: number): void {
+    if (this.rol !== 'despachador') {
+      return;
+    }
+    const quedan = JORNADAS[this.dia].duracion - this.tDia;
+    const abiertos = this.pedidos.filter((p) => p.estado === 'espera' || p.estado === 'elegir' || p.estado === 'curso').length;
+    this.tPedidoExtra += dt;
+    const cada = abiertos === 0 ? 4 : Math.max(9, 15 - this.dia * 1.5);
+    if (quedan < 30 || abiertos >= 3 || this.tPedidoExtra < cada) {
+      return;
+    }
+    this.tPedidoExtra = 0;
+    const k = this.nPedidoExtra++;
+    const cantidades = this.repisaVista().cantidades;
+    const conStock = CATEGORIAS.map((c, i) => ({ id: c.id, n: cantidades[i] })).filter((c) => c.n >= 1);
+    const lista = conStock.length ? conStock : CATEGORIAS.map((c) => ({ id: c.id, n: 0 }));
+    const a = lista[(k * 3 + this.dia) % lista.length];
+    const b = lista[(k * 3 + this.dia + 1) % lista.length];
+    const pide: Partial<Record<IdCategoria, number>> =
+      k % 3 === 2 && b.id !== a.id ? { [a.id]: 1, [b.id]: 1 } : { [a.id]: Math.max(1, Math.min(2, a.n || 2)) };
+    this.cuentas[this.dia].pedidos++;
+    this.evento({
+      tipo: 'pedido',
+      en: this.tDia,
+      municipio: MUNICIPIOS[(this.dia * 5 + k * 7 + 2) % MUNICIPIOS.length],
+      pide,
+      plazo: Math.max(50, 75 - this.dia * 4),
+      familias: 2,
+    });
   }
 
   protected debeTerminar(): boolean {

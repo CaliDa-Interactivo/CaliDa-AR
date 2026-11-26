@@ -247,6 +247,11 @@ export interface OpcionesPiezas {
   palma: boolean;
   /** Solo contorno: sin la muñeca ni sus huesos (la línea se desvanece hacia el brazo). */
   contorno: boolean;
+  /**
+   * Esferas intermedias por hueso: el grosor pasa suave de una articulación a
+   * la otra (dedo orgánico, que se afina hacia la punta) en vez de un tubo recto.
+   */
+  intermedias?: number;
 }
 
 /** Esferas, cápsulas y palma de una o dos manos (para tapar, dibujar o contornear). */
@@ -265,7 +270,8 @@ export class PiezasMano {
 
   constructor(private op: OpcionesPiezas) {
     // Muchos segmentos: el borde de los dedos se ve redondo, no en rectas.
-    this.esferas = new InstancedMesh(new SphereGeometry(1, 24, 16), op.material, N_ART * 2);
+    const extra = (op.intermedias ?? 0) * HUESOS.length;
+    this.esferas = new InstancedMesh(new SphereGeometry(1, 24, 16), op.material, (N_ART + extra) * 2);
     this.capsulas = new InstancedMesh(new CylinderGeometry(1, 1, 1, 24, 1, true), op.material, HUESOS.length * 2);
     for (const malla of [this.esferas, this.capsulas]) {
       malla.renderOrder = op.orden;
@@ -323,7 +329,20 @@ export class PiezasMano {
         if (largo < 1e-4) {
           continue;
         }
-        const radio = Math.min(radioSeguro(r[i]), radioSeguro(r[j])) * f + margen;
+        const ri = radioSeguro(r[i]) * f + margen;
+        const rj = radioSeguro(r[j]) * f + margen;
+        // Esferas intermedias con el grosor interpolado: el hueso se afina
+        // suave hacia la punta y las uniones quedan redondeadas.
+        const n = this.op.intermedias ?? 0;
+        for (let t = 1; t <= n; t++) {
+          const k = t / (n + 1);
+          const radioK = ri + (rj - ri) * k;
+          this.m
+            .makeScale(radioK, radioK, radioK)
+            .setPosition(this.a.x + this.d.x * k, this.a.y + this.d.y * k, this.a.z + this.d.z * k);
+          this.esferas.setMatrixAt(nE++, this.m);
+        }
+        const radio = Math.min(ri, rj);
         this.q.setFromUnitVectors(this.arriba, this.d.multiplyScalar(1 / largo));
         this.s.set(radio, largo, radio);
         this.a.add(this.b).multiplyScalar(0.5);
@@ -361,21 +380,92 @@ export const MATERIAL_LINEA = new MeshBasicMaterial({
 /** Grosor de la línea blanca (m). */
 export const GROSOR_LINEA = 0.0022;
 
-/** Tramos del antebrazo desde la muñeca: [largo hasta el final del tramo (m), radio (m)] (un antebrazo real). */
-const ANTEBRAZO: [number, number][] = [
-  [0.06, 0.029],
-  [0.16, 0.034],
-  [0.3, 0.037],
-];
+/**
+ * Brazo de una persona adulta (m): del hombro al codo y del codo a la
+ * muñeca, y el grosor del antebrazo junto a la muñeca y junto al codo.
+ */
+export const BRAZO = { superior: 0.29, antebrazo: 0.26, radioMuneca: 0.027, radioCodo: 0.04 };
+/** Hombro respecto a los ojos: más abajo, hacia el lado de cada mano y un poco atrás (m). */
+const HOMBRO = { abajo: 0.24, lado: 0.18, atras: 0.06 };
+/** Esferas a lo largo del antebrazo (más: borde más suave). */
+const ESFERAS_ANTEBRAZO = 12;
 
 /**
- * La mano real tapa lo virtual a ras (radio real, sin margen) y también el
- * antebrazo (desde la muñeca hacia el codo, en la dirección del giro de la
- * muñeca). No se dibuja nada: se ve la mano real (passthrough).
+ * Dónde está el codo, a partir del hombro (estimado desde la cabeza) y de la
+ * muñeca (real): un brazo de dos huesos con el codo hacia abajo y un poco
+ * afuera, como cae naturalmente. Escribe el codo en `salida`.
+ */
+export function estimarCodo(
+  hombro: { x: number; y: number; z: number },
+  muneca: { x: number; y: number; z: number },
+  afuera: { x: number; z: number },
+  salida: { x: number; y: number; z: number },
+): void {
+  const L1 = BRAZO.superior;
+  const L2 = BRAZO.antebrazo;
+  let dx = muneca.x - hombro.x;
+  let dy = muneca.y - hombro.y;
+  let dz = muneca.z - hombro.z;
+  const d0 = Math.hypot(dx, dy, dz) || 1e-6;
+  dx /= d0;
+  dy /= d0;
+  dz /= d0;
+  // Brazo estirado de más (la estimación del hombro no es exacta): codo en la línea.
+  const d = Math.min(d0, L1 + L2 - 1e-4);
+  // Distancia del hombro al pie del codo sobre la línea hombro–muñeca, y altura del codo.
+  const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  // El codo cae hacia abajo y un poco hacia afuera (perpendicular a la línea).
+  let px = afuera.x * 0.5;
+  let py = -1;
+  let pz = afuera.z * 0.5;
+  const punto = px * dx + py * dy + pz * dz;
+  px -= punto * dx;
+  py -= punto * dy;
+  pz -= punto * dz;
+  const lp = Math.hypot(px, py, pz);
+  if (lp < 1e-6) {
+    px = 0;
+    py = -1;
+    pz = 0;
+  } else {
+    px /= lp;
+    py /= lp;
+    pz /= lp;
+  }
+  // Desde la muñeca, el codo queda a la distancia real del antebrazo.
+  const ex = hombro.x + dx * a + px * h;
+  const ey = hombro.y + dy * a + py * h;
+  const ez = hombro.z + dz * a + pz * h;
+  let fx = ex - muneca.x;
+  let fy = ey - muneca.y;
+  let fz = ez - muneca.z;
+  const lf = Math.hypot(fx, fy, fz) || 1e-6;
+  fx /= lf;
+  fy /= lf;
+  fz /= lf;
+  salida.x = muneca.x + fx * L2;
+  salida.y = muneca.y + fy * L2;
+  salida.z = muneca.z + fz * L2;
+}
+
+/**
+ * La mano real tapa lo virtual a ras (radio real, sin margen), con dedos que
+ * se afinan suave, y también el antebrazo: de la muñeca hacia el codo, que se
+ * estima con el hombro (a partir de la cabeza) para que siga al brazo real
+ * aunque se doble la muñeca. No se dibuja nada: se ve la mano real (passthrough).
  */
 export class OclusorManos {
   readonly grupo = new Group();
-  private tapa = new PiezasMano({ material: MATERIAL_TAPA, margen: 0, escalaRadio: 0.92, orden: -10, palma: true, contorno: false });
+  private tapa = new PiezasMano({
+    material: MATERIAL_TAPA,
+    margen: 0,
+    escalaRadio: 0.92,
+    orden: -10,
+    palma: true,
+    contorno: false,
+    intermedias: 3,
+  });
   private datos: (DatosMano | null)[] = [null, null];
   private brazoCil: InstancedMesh;
   private brazoEsf: InstancedMesh;
@@ -383,15 +473,21 @@ export class OclusorManos {
   private a = new Vector3();
   private b = new Vector3();
   private d = new Vector3();
-  private e = new Vector3();
   private c = new Vector3();
   private q = new Quaternion();
   private s = new Vector3();
   private arriba = new Vector3(0, 1, 0);
+  private cabeza = new Vector3();
+  private frente = new Vector3(0, 0, -1);
+  private hombro = new Vector3();
+  private codo = new Vector3();
+  private codoSuave = [new Vector3(), new Vector3()];
+  private hayCodo = [false, false];
+  private afuera = { x: 0, z: 0 };
 
   constructor() {
-    this.brazoCil = new InstancedMesh(new CylinderGeometry(1, 1, 1, 24, 1, true), MATERIAL_TAPA, ANTEBRAZO.length * 2);
-    this.brazoEsf = new InstancedMesh(new SphereGeometry(1, 24, 16), MATERIAL_TAPA, ANTEBRAZO.length * 2);
+    this.brazoCil = new InstancedMesh(new CylinderGeometry(1, 1, 1, 24, 1, true), MATERIAL_TAPA, ESFERAS_ANTEBRAZO * 2);
+    this.brazoEsf = new InstancedMesh(new SphereGeometry(1, 24, 16), MATERIAL_TAPA, (ESFERAS_ANTEBRAZO + 1) * 2);
     for (const malla of [this.brazoCil, this.brazoEsf]) {
       malla.renderOrder = -10;
       malla.frustumCulled = false;
@@ -401,39 +497,97 @@ export class OclusorManos {
     this.grupo.add(this.tapa.grupo, this.brazoCil, this.brazoEsf);
   }
 
-  actualizar(manos: Mano[]): void {
+  /**
+   * `cabeza` y `frente`: posición de los ojos y hacia dónde mira, en
+   * coordenadas del mundo (para estimar los hombros).
+   */
+  actualizar(manos: Mano[], cabeza?: Vector3, frente?: Vector3): void {
     manos.forEach((mano, k) => (this.datos[k] = mano.conArticulaciones ? mano : null));
     this.tapa.actualizar(this.datos);
+    const conCabeza = !!cabeza && !!frente;
+    if (cabeza && frente) {
+      // Cabeza y su frente (horizontal) en las coordenadas de las manos.
+      this.grupo.updateWorldMatrix(true, false);
+      this.cabeza.copy(cabeza);
+      this.grupo.worldToLocal(this.cabeza);
+      this.d.copy(cabeza).add(frente);
+      this.grupo.worldToLocal(this.d);
+      this.frente.subVectors(this.d, this.cabeza);
+      this.frente.y = 0;
+      if (this.frente.lengthSq() < 1e-6) {
+        this.frente.set(0, 0, -1);
+      }
+      this.frente.normalize();
+    }
     let nC = 0;
     let nE = 0;
-    for (const mano of manos) {
-      if (!mano.conArticulaciones) {
-        continue;
+    manos.forEach((mano, k) => {
+      if (!mano.conArticulaciones || (mano.lado !== 'left' && mano.lado !== 'right')) {
+        this.hayCodo[k] = false;
+        return;
       }
       const p = mano.articulaciones;
-      // Hacia el codo: +Z de la muñeca, con el sentido que se aleja de la palma.
-      this.d.set(0, 0, 1).applyQuaternion(mano.giro);
-      this.e.set(p[0] - p[30], p[1] - p[31], p[2] - p[32]);
-      if (this.d.dot(this.e) < 0) {
-        this.d.negate();
+      const muneca = this.a.set(p[0], p[1], p[2]);
+      // Afuera: a la derecha de la mirada para la mano derecha, a la izquierda para la izquierda.
+      const signo = mano.lado === 'right' ? 1 : -1;
+      this.afuera.x = -this.frente.z * signo;
+      this.afuera.z = this.frente.x * signo;
+      if (conCabeza) {
+        this.hombro.set(
+          this.cabeza.x + this.afuera.x * HOMBRO.lado - this.frente.x * HOMBRO.atras,
+          this.cabeza.y - HOMBRO.abajo,
+          this.cabeza.z + this.afuera.z * HOMBRO.lado - this.frente.z * HOMBRO.atras,
+        );
+        estimarCodo(this.hombro, muneca, this.afuera, this.codo);
+      } else {
+        // Sin cabeza: hacia atrás de la muñeca, en el sentido que se aleja de la palma.
+        this.d.set(0, 0, 1).applyQuaternion(mano.giro);
+        this.c.set(p[0] - p[30], p[1] - p[31], p[2] - p[32]);
+        if (this.d.dot(this.c) < 0) {
+          this.d.negate();
+        }
+        this.codo.copy(muneca).addScaledVector(this.d, BRAZO.antebrazo);
       }
-      let desde = 0;
-      for (const [hasta, radio] of ANTEBRAZO) {
-        this.a.set(p[0], p[1], p[2]).addScaledVector(this.d, desde);
-        this.b.set(p[0], p[1], p[2]).addScaledVector(this.d, hasta);
-        this.q.setFromUnitVectors(this.arriba, this.d);
-        this.s.set(radio, hasta - desde, radio);
-        this.c.copy(this.a).add(this.b).multiplyScalar(0.5);
-        this.m.compose(this.c, this.q, this.s);
-        this.brazoCil.setMatrixAt(nC++, this.m);
-        this.m.makeScale(radio, radio, radio).setPosition(this.b.x, this.b.y, this.b.z);
+      // El codo se mueve suave (no tiembla con la muñeca).
+      const suave = this.codoSuave[k];
+      if (this.hayCodo[k]) {
+        suave.lerp(this.codo, 0.35);
+      } else {
+        suave.copy(this.codo);
+        this.hayCodo[k] = true;
+      }
+      // Antebrazo: esferas y tramos que se ensanchan de la muñeca al codo.
+      this.d.subVectors(suave, muneca);
+      const largo = this.d.length();
+      if (largo < 1e-3) {
+        return;
+      }
+      this.d.multiplyScalar(1 / largo);
+      this.q.setFromUnitVectors(this.arriba, this.d);
+      for (let i = 0; i <= ESFERAS_ANTEBRAZO; i++) {
+        const t = i / ESFERAS_ANTEBRAZO;
+        const r = radioAntebrazo(t);
+        this.b.copy(muneca).addScaledVector(this.d, largo * t);
+        this.m.makeScale(r, r, r).setPosition(this.b.x, this.b.y, this.b.z);
         this.brazoEsf.setMatrixAt(nE++, this.m);
-        desde = hasta;
+        if (i > 0) {
+          const t0 = (i - 1) / ESFERAS_ANTEBRAZO;
+          const rc = Math.min(radioAntebrazo(t0), r);
+          this.c.copy(muneca).addScaledVector(this.d, largo * (t0 + t) * 0.5);
+          this.s.set(rc, largo / ESFERAS_ANTEBRAZO, rc);
+          this.m.compose(this.c, this.q, this.s);
+          this.brazoCil.setMatrixAt(nC++, this.m);
+        }
       }
-    }
+    });
     this.brazoCil.count = nC;
     this.brazoEsf.count = nE;
     this.brazoCil.instanceMatrix.needsUpdate = true;
     this.brazoEsf.instanceMatrix.needsUpdate = true;
   }
+}
+
+/** Grosor del antebrazo: delgado en la muñeca, se ensancha rápido y llega al del codo. */
+function radioAntebrazo(t: number): number {
+  return BRAZO.radioMuneca + (BRAZO.radioCodo - BRAZO.radioMuneca) * Math.sqrt(t);
 }

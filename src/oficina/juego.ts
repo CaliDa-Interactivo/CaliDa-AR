@@ -1721,7 +1721,7 @@ export class OficinaSystem extends createSystem({}) {
     }
     this.leerCabeza();
     this.manos.actualizar(this.world.xrSession, this.world.xrFrame, this.world.xrReferenceSpace);
-    this.oclusorManos.actualizar(this.manos.lista);
+    this.oclusorManos.actualizar(this.manos.lista, this.cabeza, this.frente);
     this.ejemploPinza(dt);
     this.diagnostico?.actualizar(dt);
     const cuadro = this.world.xrFrame;

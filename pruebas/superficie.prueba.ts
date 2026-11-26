@@ -122,7 +122,7 @@ prueba('un sofá no es mesa', () => {
 });
 
 prueba('mesa a más de un metro adelante: se encuentra igual', () => {
-  const s = buscarSuperficie(cuadro([plano(0, 0.42, -1.95, 1.15, 0.6)]), ESPACIO, 0, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO);
+  const s = buscarSuperficie(cuadro([plano(0, 0.74, -1.95, 1.15, 0.6)]), ESPACIO, 0, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO);
   assert.ok(s);
   assert.ok(sobreMesa(s, 0, -1.95, 1.15, 0.6));
 });
@@ -170,6 +170,16 @@ prueba('malla: mesa con un objeto pequeño encima (un libro) sirve igual', () =>
   const s = buscarSuperficieEnMalla(r, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO);
   assert.ok(s);
   assert.ok(Math.abs(s.y - 0.74) < 0.01, 'la altura es la de la mesa, no la del libro');
+});
+
+prueba('una mesita de centro, cama o sofá bajo (menos de 60 cm) no cuenta como mesa', () => {
+  for (const alto of [0.42, 0.5, 0.58]) {
+    const s = buscarSuperficie(cuadro([plano(0, alto, -0.7, 1.2, 0.6, 0, 'table')]), ESPACIO, 0, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO);
+    assert.equal(s, null, `mesa a ${alto} m`);
+  }
+  const r = new RejillaPlana();
+  r.armar([rect(-0.6, 0.6, -1.0, -0.4, 0.45)], 0);
+  assert.equal(buscarSuperficieEnMalla(r, { x: 0, z: -0.6, giro: 0 }, ANCHO, FONDO), null, 'malla a 0,45 m');
 });
 
 console.log(`\n${pruebas} pruebas de la mesa real en verde.`);

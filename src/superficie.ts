@@ -15,6 +15,14 @@ export interface Superficie {
   giro: number;
 }
 
+/**
+ * Alturas (m sobre el piso) de una superficie que sirve de mesa. Por debajo
+ * de 60 cm son mesitas de centro, camas o sofás: la oficina quedaba casi en
+ * el suelo, lejos y con la pantalla imposible de usar de pie.
+ */
+export const ALTURA_MIN_MESA = 0.6;
+export const ALTURA_MAX_MESA = 1.3;
+
 /** Superficies horizontales que no sirven de mesa (etiquetas de WebXR / Quest). */
 const NO_SON_MESA = new Set(['floor', 'ceiling', 'couch', 'bed', 'lamp', 'plant', 'screen', 'window', 'door', 'wall art', 'wall']);
 
@@ -37,7 +45,7 @@ function dentroDelContorno(contorno: readonly DOMPointReadOnly[], x: number, z: 
  * (`ancho` × `fondo`, centrada en el punto) debe quedar SOBRE la superficie.
  * Se prefiere lo más cercano a `deseado` (donde quedaría si flotara) con el
  * giro de la mirada, o alineado con los bordes de la mesa si casi coincide.
- * Altura válida: de 35 cm a 1,3 m sobre el piso. null si no hay ninguna.
+ * Altura válida: de 60 cm a 1,3 m sobre el piso. null si no hay ninguna.
  */
 export function buscarSuperficie(
   cuadro: XRFrame,
@@ -69,7 +77,7 @@ export function buscarSuperficie(
     }
     const m = pose.transform.matrix;
     const altura = m[13] - piso;
-    if (altura < 0.35 || altura > 1.3) {
+    if (altura < ALTURA_MIN_MESA || altura > ALTURA_MAX_MESA) {
       continue;
     }
     // Ejes del plano en el mundo (para pasar puntos al espacio del plano).
@@ -209,7 +217,7 @@ export class RejillaPlana {
         }
         const y = (p[1] + p[4] + p[7]) / 3;
         const altura = y - piso;
-        if (altura < 0.35 || altura > 1.3) {
+        if (altura < ALTURA_MIN_MESA || altura > ALTURA_MAX_MESA) {
           continue;
         }
         // Celdas cuyo centro cae dentro del triángulo (en x, z).
